@@ -1,0 +1,18 @@
+name = "jstock-worker"
+main = "src/index.ts"
+compatibility_date = "2025-05-01"
+
+# D1 database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "jstock-db"
+database_id = "placeholder-create-with-wrangler-d1-create"
+
+# Cron triggers (UTC)
+[triggers]
+crons = [
+  "30 7 * * 1-5",   # 15:30 TST — scrape ETF holdings from MoneyDJ
+  "45 7 * * 1-5",   # 15:45 TST — fetch stock prices from TWSE
+  "0 8 * * 1-5",    # 16:00 TST — compute holdings diffs
+  "0 0 * * 0",      # Sunday midnight — cleanup old data
+]
