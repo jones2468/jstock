@@ -7,7 +7,7 @@
 - **Cloudflare Workers** — API + cron（Hono router）
 - **Cloudflare D1** — SQLite 資料庫
 - **Cloudflare Pages** — React 前端（Vite + TailwindCSS）
-- **資料來源**：MoneyDJ（爬持股 HTML）、TWSE OpenAPI（股價）、FinMind（歷史股價回補）
+- **資料來源**：MoneyDJ（爬持股 HTML）、TWSE OpenAPI（股價）、TWSE/TPEX（歷史日K 回補）
 
 ## Monorepo 結構
 
