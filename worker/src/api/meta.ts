@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { HonoEnv } from "../env";
 import { runScrapeHoldings } from "../cron/scrape-holdings";
 import { runComputeDiffs } from "../cron/compute-diffs";
+import { runFetchPrices } from "../cron/fetch-prices";
 
 export const metaRoutes = new Hono<HonoEnv>();
 
@@ -16,6 +17,9 @@ metaRoutes.post("/trigger/:job", async (c) => {
     case "diffs":
       await runComputeDiffs(env);
       return c.json({ ok: true, triggered: "compute_diffs" });
+    case "prices":
+      await runFetchPrices(env);
+      return c.json({ ok: true, triggered: "fetch_prices" });
     default:
       return c.json({ ok: false, error: `unknown job: ${job}` }, 400);
   }

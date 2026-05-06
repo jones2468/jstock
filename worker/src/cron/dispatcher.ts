@@ -1,6 +1,7 @@
 import type { Env } from "../env";
 import { runScrapeHoldings } from "./scrape-holdings";
 import { runComputeDiffs } from "./compute-diffs";
+import { runFetchPrices } from "./fetch-prices";
 import { DATA_RETENTION_DAYS } from "@jstock/shared";
 
 export async function handleCron(cron: string, env: Env): Promise<void> {
@@ -12,8 +13,7 @@ export async function handleCron(cron: string, env: Env): Promise<void> {
       break;
 
     case "45 7 * * 1-5":
-      // TODO Phase 4: fetch stock prices
-      console.log("[cron] fetch_prices — not implemented yet");
+      await runFetchPrices(env);
       break;
 
     case "0 8 * * 1-5":
