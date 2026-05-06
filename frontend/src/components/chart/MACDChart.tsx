@@ -46,13 +46,13 @@ export function MACDChart({ indicators, height = 120 }: Props) {
     );
 
     // MACD line
-    const macdSeries = chart.addLineSeries({ color: "#3b82f6", lineWidth: 1.5 });
+    const macdSeries = chart.addLineSeries({ color: "#3b82f6", lineWidth: 2 });
     macdSeries.setData(
       macdData.map((d) => ({ time: d.date, value: d.macd_line! }))
     );
 
     // Signal line
-    const signalSeries = chart.addLineSeries({ color: "#f59e0b", lineWidth: 1.5 });
+    const signalSeries = chart.addLineSeries({ color: "#f59e0b", lineWidth: 2 });
     signalSeries.setData(
       macdData
         .filter((d) => d.signal_line != null)

@@ -5,5 +5,9 @@ dist/
 .env
 .env.local
 *.log
+*.tsbuildinfo
 .DS_Store
 Thumbs.db
+
+# tsc -b emitted JS alongside .tsx sources
+frontend/src/**/*.js

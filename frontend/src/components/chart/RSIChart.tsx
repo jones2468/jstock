@@ -31,7 +31,7 @@ export function RSIChart({ indicators, height = 120 }: Props) {
 
     const rsiSeries = chart.addLineSeries({
       color: "#a855f7",
-      lineWidth: 1.5,
+      lineWidth: 2,
     });
     rsiSeries.setData(
       indicators

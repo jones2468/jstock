@@ -108,12 +108,12 @@ function addLineSeries(
   indicators: IndicatorRow[],
   key: keyof IndicatorRow,
   color: string,
-  lineWidth: number = 1,
+  lineWidth: 1 | 2 | 3 | 4 = 1,
   dashed: boolean = false
 ) {
   const series = chart.addLineSeries({
     color,
-    lineWidth,
+    lineWidth: lineWidth as 1 | 2 | 3 | 4,
     crosshairMarkerVisible: false,
     ...(dashed ? { lineStyle: 2 } : {}),
   });
