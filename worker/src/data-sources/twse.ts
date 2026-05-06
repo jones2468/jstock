@@ -54,13 +54,14 @@ export async function fetchTWSEDayAll(): Promise<StockPriceRow[]> {
 
 export async function fetchStockHistory(
   stockCode: string,
-  months: number = 12
+  months: number = 12,
+  startFrom?: Date
 ): Promise<StockPriceRow[]> {
   const all: StockPriceRow[] = [];
-  const now = new Date();
+  const ref = startFrom ?? new Date();
 
   for (let i = 0; i < months; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const d = new Date(ref.getFullYear(), ref.getMonth() - i, 1);
     const rows = await fetchTWSEMonth(stockCode, d);
     if (rows.length > 0) {
       all.push(...rows);

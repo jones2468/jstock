@@ -6,24 +6,15 @@ export const chartRoutes = new Hono<HonoEnv>();
 
 chartRoutes.get("/:code/prices", async (c) => {
   const code = c.req.param("code");
-  const start = c.req.query("start") ?? "2020-01-01";
-  const end = c.req.query("end") ?? new Date().toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
+  const defaultStart = new Date(Date.now() - 180 * 86400000)
+    .toISOString()
+    .slice(0, 10);
+  const start = c.req.query("start") ?? defaultStart;
+  const end = c.req.query("end") ?? today;
   const db = c.env.DB;
 
-  const { results: countResult } = await db
-    .prepare(`SELECT COUNT(*) as cnt FROM stock_prices WHERE stock_code = ?`)
-    .bind(code)
-    .all();
-  const cnt = (countResult[0]?.cnt as number) ?? 0;
-
-  if (cnt < 60) {
-    try {
-      const history = await fetchStockHistory(code, 12);
-      if (history.length > 0) await batchUpsertPrices(db, history);
-    } catch (e) {
-      console.error(`[chart] backfill ${code} failed: ${(e as Error).message}`);
-    }
-  }
+  await ensureHistoricalData(db, code, start);
 
   const { results } = await db
     .prepare(
@@ -38,6 +29,91 @@ chartRoutes.get("/:code/prices", async (c) => {
   return c.json({ ok: true, data: results });
 });
 
+chartRoutes.get("/:code/indicators", async (c) => {
+  const code = c.req.param("code");
+  const today = new Date().toISOString().slice(0, 10);
+  const defaultStart = new Date(Date.now() - 180 * 86400000)
+    .toISOString()
+    .slice(0, 10);
+  const start = c.req.query("start") ?? defaultStart;
+  const end = c.req.query("end") ?? today;
+  const db = c.env.DB;
+
+  const leadInStart = new Date(new Date(start).getTime() - 100 * 86400000)
+    .toISOString()
+    .slice(0, 10);
+
+  await ensureHistoricalData(db, code, leadInStart);
+
+  const { results } = await db
+    .prepare(
+      `SELECT price_date, close_price
+       FROM stock_prices
+       WHERE stock_code = ? AND price_date BETWEEN ? AND ?
+       ORDER BY price_date`
+    )
+    .bind(code, leadInStart, end)
+    .all();
+
+  if (!results.length) return c.json({ ok: true, data: [] });
+
+  const prices = results.map((r) => ({
+    date: r.price_date as string,
+    close: r.close_price as number,
+  }));
+
+  const allIndicators = computeIndicators(prices);
+  const filtered = allIndicators.filter(
+    (ind) => ind.date >= start && ind.date <= end
+  );
+
+  return c.json({ ok: true, data: filtered });
+});
+
+async function ensureHistoricalData(
+  db: D1Database,
+  code: string,
+  start: string
+) {
+  const earliest = await db
+    .prepare(
+      `SELECT MIN(price_date) as d FROM stock_prices WHERE stock_code = ?`
+    )
+    .bind(code)
+    .first<{ d: string | null }>();
+
+  if (earliest?.d && earliest.d <= start) return;
+
+  try {
+    const now = new Date();
+    const startDate = new Date(start);
+
+    if (earliest?.d) {
+      const gapEnd = new Date(earliest.d);
+      const gapMonths =
+        (gapEnd.getFullYear() - startDate.getFullYear()) * 12 +
+        (gapEnd.getMonth() - startDate.getMonth()) +
+        1;
+      if (gapMonths > 0) {
+        const history = await fetchStockHistory(code, gapMonths, gapEnd);
+        if (history.length > 0) await batchUpsertPrices(db, history);
+      }
+    } else {
+      const totalMonths =
+        (now.getFullYear() - startDate.getFullYear()) * 12 +
+        (now.getMonth() - startDate.getMonth()) +
+        1;
+      const history = await fetchStockHistory(
+        code,
+        Math.min(totalMonths, 60)
+      );
+      if (history.length > 0) await batchUpsertPrices(db, history);
+    }
+  } catch (e) {
+    console.error(`[chart] backfill ${code} failed: ${(e as Error).message}`);
+  }
+}
+
 async function batchUpsertPrices(db: D1Database, rows: StockPriceRow[]) {
   const BATCH = 50;
   for (let i = 0; i < rows.length; i += BATCH) {
@@ -49,55 +125,21 @@ async function batchUpsertPrices(db: D1Database, rows: StockPriceRow[]) {
            (price_date, stock_code, stock_name, open_price, high_price, low_price, close_price, volume, change_val)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
-        .bind(r.price_date, r.stock_code, r.stock_name, r.open_price, r.high_price, r.low_price, r.close_price, r.volume, r.change_val)
+        .bind(
+          r.price_date,
+          r.stock_code,
+          r.stock_name,
+          r.open_price,
+          r.high_price,
+          r.low_price,
+          r.close_price,
+          r.volume,
+          r.change_val
+        )
     );
     await db.batch(stmts);
   }
 }
-
-chartRoutes.get("/:code/indicators", async (c) => {
-  const code = c.req.param("code");
-  const days = parseInt(c.req.query("days") ?? "250");
-  const db = c.env.DB;
-
-  const { results: countResult } = await db
-    .prepare(`SELECT COUNT(*) as cnt FROM stock_prices WHERE stock_code = ?`)
-    .bind(code)
-    .all();
-  const cnt = (countResult[0]?.cnt as number) ?? 0;
-
-  if (cnt < 60) {
-    try {
-      const history = await fetchStockHistory(code, 12);
-      if (history.length > 0) await batchUpsertPrices(db, history);
-    } catch (e) {
-      console.error(`[chart] backfill ${code} failed: ${(e as Error).message}`);
-    }
-  }
-
-  const { results } = await db
-    .prepare(
-      `SELECT price_date, close_price
-       FROM stock_prices
-       WHERE stock_code = ?
-       ORDER BY price_date DESC
-       LIMIT ?`
-    )
-    .bind(code, days)
-    .all();
-
-  if (!results.length) return c.json({ ok: true, data: [] });
-
-  const prices = results
-    .reverse()
-    .map((r) => ({
-      date: r.price_date as string,
-      close: r.close_price as number,
-    }));
-
-  const indicators = computeIndicators(prices);
-  return c.json({ ok: true, data: indicators });
-});
 
 function computeIndicators(prices: Array<{ date: string; close: number }>) {
   const closes = prices.map((p) => p.close);
@@ -185,12 +227,7 @@ function rsi(data: number[], period: number): (number | null)[] {
   return result;
 }
 
-function macd(
-  data: number[],
-  fast: number,
-  slow: number,
-  signal: number
-) {
+function macd(data: number[], fast: number, slow: number, signal: number) {
   const emaFast = ema(data, fast);
   const emaSlow = ema(data, slow);
 
