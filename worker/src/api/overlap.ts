@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import type { HonoEnv } from "../router";
+import type { HonoEnv } from "../env";
 
 export const overlapRoutes = new Hono<HonoEnv>();
 

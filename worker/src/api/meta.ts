@@ -1,7 +1,25 @@
 import { Hono } from "hono";
-import type { HonoEnv } from "../router";
+import type { HonoEnv } from "../env";
+import { runScrapeHoldings } from "../cron/scrape-holdings";
+import { runComputeDiffs } from "../cron/compute-diffs";
 
 export const metaRoutes = new Hono<HonoEnv>();
+
+metaRoutes.post("/trigger/:job", async (c) => {
+  const job = c.req.param("job");
+  const env = c.env;
+
+  switch (job) {
+    case "scrape":
+      await runScrapeHoldings(env);
+      return c.json({ ok: true, triggered: "scrape_holdings" });
+    case "diffs":
+      await runComputeDiffs(env);
+      return c.json({ ok: true, triggered: "compute_diffs" });
+    default:
+      return c.json({ ok: false, error: `unknown job: ${job}` }, 400);
+  }
+});
 
 metaRoutes.get("/status", async (c) => {
   const db = c.env.DB;

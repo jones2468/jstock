@@ -1,12 +1,14 @@
 import type { Env } from "../env";
+import { runScrapeHoldings } from "./scrape-holdings";
+import { runComputeDiffs } from "./compute-diffs";
+import { DATA_RETENTION_DAYS } from "@jstock/shared";
 
 export async function handleCron(cron: string, env: Env): Promise<void> {
   console.log(`[cron] triggered: ${cron}`);
 
   switch (cron) {
     case "30 7 * * 1-5":
-      // TODO Phase 2: scrape MoneyDJ holdings
-      console.log("[cron] scrape_holdings — not implemented yet");
+      await runScrapeHoldings(env);
       break;
 
     case "45 7 * * 1-5":
@@ -15,16 +17,39 @@ export async function handleCron(cron: string, env: Env): Promise<void> {
       break;
 
     case "0 8 * * 1-5":
-      // TODO Phase 2: compute holdings diffs
-      console.log("[cron] compute_diffs — not implemented yet");
+      await runComputeDiffs(env);
       break;
 
     case "0 0 * * 0":
-      // TODO: cleanup old data
-      console.log("[cron] cleanup — not implemented yet");
+      await runCleanup(env);
       break;
 
     default:
       console.log(`[cron] unknown schedule: ${cron}`);
   }
+}
+
+async function runCleanup(env: Env): Promise<void> {
+  const db = env.DB;
+  const days = DATA_RETENTION_DAYS;
+
+  const tables = ["holdings_snapshots", "holdings_diffs", "stock_prices"];
+  const dateCol: Record<string, string> = {
+    holdings_snapshots: "snapshot_date",
+    holdings_diffs: "diff_date",
+    stock_prices: "price_date",
+  };
+
+  for (const table of tables) {
+    const col = dateCol[table];
+    const { meta } = await db
+      .prepare(`DELETE FROM ${table} WHERE ${col} < date('now', '-${days} days')`)
+      .run();
+    console.log(`[cleanup] ${table}: ${meta.changes} rows deleted`);
+  }
+
+  // Also clean old cron_runs
+  await db
+    .prepare(`DELETE FROM cron_runs WHERE run_date < date('now', '-${days} days')`)
+    .run();
 }
