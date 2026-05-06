@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { HonoEnv } from "../env";
+import { fetchStockHistory, type StockPriceRow } from "../data-sources/twse";
 
 export const chartRoutes = new Hono<HonoEnv>();
 
@@ -8,6 +9,21 @@ chartRoutes.get("/:code/prices", async (c) => {
   const start = c.req.query("start") ?? "2020-01-01";
   const end = c.req.query("end") ?? new Date().toISOString().slice(0, 10);
   const db = c.env.DB;
+
+  const { results: countResult } = await db
+    .prepare(`SELECT COUNT(*) as cnt FROM stock_prices WHERE stock_code = ?`)
+    .bind(code)
+    .all();
+  const cnt = (countResult[0]?.cnt as number) ?? 0;
+
+  if (cnt < 60) {
+    try {
+      const history = await fetchStockHistory(code, 12);
+      if (history.length > 0) await batchUpsertPrices(db, history);
+    } catch (e) {
+      console.error(`[chart] backfill ${code} failed: ${(e as Error).message}`);
+    }
+  }
 
   const { results } = await db
     .prepare(
@@ -22,10 +38,42 @@ chartRoutes.get("/:code/prices", async (c) => {
   return c.json({ ok: true, data: results });
 });
 
+async function batchUpsertPrices(db: D1Database, rows: StockPriceRow[]) {
+  const BATCH = 50;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const batch = rows.slice(i, i + BATCH);
+    const stmts = batch.map((r) =>
+      db
+        .prepare(
+          `INSERT OR IGNORE INTO stock_prices
+           (price_date, stock_code, stock_name, open_price, high_price, low_price, close_price, volume, change_val)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .bind(r.price_date, r.stock_code, r.stock_name, r.open_price, r.high_price, r.low_price, r.close_price, r.volume, r.change_val)
+    );
+    await db.batch(stmts);
+  }
+}
+
 chartRoutes.get("/:code/indicators", async (c) => {
   const code = c.req.param("code");
-  const days = parseInt(c.req.query("days") ?? "120");
+  const days = parseInt(c.req.query("days") ?? "250");
   const db = c.env.DB;
+
+  const { results: countResult } = await db
+    .prepare(`SELECT COUNT(*) as cnt FROM stock_prices WHERE stock_code = ?`)
+    .bind(code)
+    .all();
+  const cnt = (countResult[0]?.cnt as number) ?? 0;
+
+  if (cnt < 60) {
+    try {
+      const history = await fetchStockHistory(code, 12);
+      if (history.length > 0) await batchUpsertPrices(db, history);
+    } catch (e) {
+      console.error(`[chart] backfill ${code} failed: ${(e as Error).message}`);
+    }
+  }
 
   const { results } = await db
     .prepare(

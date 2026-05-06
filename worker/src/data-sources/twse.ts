@@ -1,4 +1,4 @@
-import { TWSE_STOCK_DAY_ALL } from "@jstock/shared";
+import { TWSE_STOCK_DAY_ALL, TWSE_STOCK_DAY, TPEX_STOCK_DAY } from "@jstock/shared";
 
 export interface TWSERawRow {
   Date: string;
@@ -50,6 +50,106 @@ export async function fetchTWSEDayAll(): Promise<StockPriceRow[]> {
       volume: parseNum(r.TradeVolume),
       change_val: parseNum(r.Change),
     }));
+}
+
+export async function fetchStockHistory(
+  stockCode: string,
+  months: number = 12
+): Promise<StockPriceRow[]> {
+  const all: StockPriceRow[] = [];
+  const now = new Date();
+
+  for (let i = 0; i < months; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const rows = await fetchTWSEMonth(stockCode, d);
+    if (rows.length > 0) {
+      all.push(...rows);
+    } else {
+      const tpexRows = await fetchTPEXMonth(stockCode, d);
+      all.push(...tpexRows);
+      if (i === 0 && tpexRows.length === 0) continue;
+    }
+    if (i < months - 1) await sleep(350);
+  }
+
+  all.sort((a, b) => a.price_date.localeCompare(b.price_date));
+  return all;
+}
+
+async function fetchTWSEMonth(
+  code: string,
+  date: Date
+): Promise<StockPriceRow[]> {
+  const dateStr =
+    `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}01`;
+  const url = TWSE_STOCK_DAY(code, dateStr);
+
+  try {
+    const res = await fetch(url, {
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) return [];
+    const json: any = await res.json();
+    if (json.stat !== "OK" || !json.data?.length) return [];
+
+    return json.data.map((row: string[]) => ({
+      price_date: rocToIso(row[0]),
+      stock_code: code,
+      stock_name: json.title?.split(" ")[2] ?? "",
+      open_price: parseNum(row[3]),
+      high_price: parseNum(row[4]),
+      low_price: parseNum(row[5]),
+      close_price: parseNum(row[6]) ?? 0,
+      volume: parseNum(row[1]),
+      change_val: parseNum(row[7]),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function fetchTPEXMonth(
+  code: string,
+  date: Date
+): Promise<StockPriceRow[]> {
+  const rocYear = date.getFullYear() - 1911;
+  const rocYM = `${rocYear}/${String(date.getMonth() + 1).padStart(2, "0")}`;
+  const url = TPEX_STOCK_DAY(code, rocYM);
+
+  try {
+    const res = await fetch(url, {
+      headers: {
+        Accept: "application/json",
+        "X-Requested-With": "XMLHttpRequest",
+      },
+    });
+    if (!res.ok) return [];
+    const json: any = await res.json();
+    if (!json.aaData?.length) return [];
+
+    return json.aaData.map((row: string[]) => ({
+      price_date: rocToIso(row[0]),
+      stock_code: code,
+      stock_name: json.stkName ?? "",
+      open_price: parseNum(row[3]),
+      high_price: parseNum(row[4]),
+      low_price: parseNum(row[5]),
+      close_price: parseNum(row[6]) ?? 0,
+      volume: tpexVolume(row[1]),
+      change_val: parseNum(row[7]),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function tpexVolume(s: string): number | null {
+  const n = parseNum(s);
+  return n !== null ? n * 1000 : null;
+}
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 function rocToIso(rocDate: string): string {

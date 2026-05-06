@@ -7,6 +7,12 @@ export const TWSE_STOCK_DAY_ALL =
 export const TWSE_BWIBBU_ALL =
   "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL";
 
+export const TWSE_STOCK_DAY = (code: string, date: string) =>
+  `https://www.twse.com.tw/exchangeReport/STOCK_DAY?response=json&date=${date}&stockNo=${code}`;
+
+export const TPEX_STOCK_DAY = (code: string, rocYM: string) =>
+  `https://www.tpex.org.tw/web/stock/aftertrading/daily_trading_info/st43_result.php?l=zh-tw&d=${rocYM}&stkno=${code}`;
+
 export const FINMIND_API = "https://api.finmindtrade.com/api/v4/data";
 
 export const DATA_RETENTION_DAYS = 90;
