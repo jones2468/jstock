@@ -1,5 +1,5 @@
 import type { Env } from "../env";
-import { ACTIVE_ETFS, CRON_JOBS } from "@jstock/shared";
+import { CRON_JOBS } from "@jstock/shared";
 import { logCronRun } from "./log";
 import { getTwMarketDate, getPrevTradingDate } from "../utils/date";
 
@@ -34,15 +34,22 @@ export async function runComputeDiffs(env: Env): Promise<void> {
   let etfCount = 0;
   const errors: string[] = [];
 
-  for (const etf of ACTIVE_ETFS) {
+  const { results: etfsWithData } = await db
+    .prepare(
+      `SELECT DISTINCT etf_code FROM holdings_snapshots WHERE snapshot_date = ?`
+    )
+    .bind(today)
+    .all<{ etf_code: string }>();
+
+  for (const etf of etfsWithData ?? []) {
     try {
-      const diffs = await computeEtfDiffs(db, today, prevDate, etf.code);
+      const diffs = await computeEtfDiffs(db, today, prevDate, etf.etf_code);
       if (diffs > 0) {
         totalDiffs += diffs;
         etfCount++;
       }
     } catch (err) {
-      errors.push(`${etf.code}: ${(err as Error).message}`);
+      errors.push(`${etf.etf_code}: ${(err as Error).message}`);
     }
   }
 

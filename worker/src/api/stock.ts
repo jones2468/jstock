@@ -32,8 +32,18 @@ stockRoutes.get("/search", async (c) => {
 
 stockRoutes.get("/:code/etfs", async (c) => {
   const code = c.req.param("code");
-  const date = c.req.query("date") ?? new Date().toISOString().slice(0, 10);
   const db = c.env.DB;
+
+  let date = c.req.query("date");
+  if (!date) {
+    const latest = await db
+      .prepare(
+        `SELECT MAX(snapshot_date) as d FROM holdings_snapshots WHERE stock_code = ?`
+      )
+      .bind(code)
+      .first<{ d: string | null }>();
+    date = latest?.d ?? new Date().toISOString().slice(0, 10);
+  }
 
   const { results } = await db
     .prepare(
@@ -51,7 +61,7 @@ stockRoutes.get("/:code/etfs", async (c) => {
     .bind(code, date)
     .all();
 
-  return c.json({ ok: true, data: results });
+  return c.json({ ok: true, data: results, snapshot_date: date });
 });
 
 // 加入 watchlist 時觸發：確保 stock_prices 已有最近 1 年資料；冪等

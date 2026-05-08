@@ -5,10 +5,16 @@ import { Hono } from "hono";
 import type { HonoEnv } from "../env";
 import { runFetchInstitutionalMargin } from "../cron/fetch-institutional-margin";
 import { runFetchRevenue } from "../cron/fetch-revenue";
+import { runScrapeHoldings } from "../cron/scrape-holdings";
 import { fetchMonthlyRevenue } from "../data-sources/mops";
 import type { Env } from "../env";
 
 export const adminRoutes = new Hono<HonoEnv>();
+
+adminRoutes.post("/run/scrape-holdings", async (c) => {
+  await runScrapeHoldings(c.env as unknown as Env);
+  return c.json({ ok: true });
+});
 
 adminRoutes.post("/run/institutional-margin", async (c) => {
   await runFetchInstitutionalMargin(c.env as unknown as Env);
