@@ -73,6 +73,73 @@ stockRoutes.post("/:code/backfill", async (c) => {
   });
 });
 
+// 三大法人買賣超（最近 N 日）
+stockRoutes.get("/:code/institutional", async (c) => {
+  const code = c.req.param("code");
+  const days = Math.min(parseInt(c.req.query("days") ?? "60", 10) || 60, 365);
+  const db = c.env.DB;
+
+  const { results } = await db
+    .prepare(
+      `SELECT trade_date,
+              foreign_buy, foreign_sell, foreign_net,
+              invest_buy, invest_sell, invest_net,
+              dealer_buy, dealer_sell, dealer_net,
+              total_net
+       FROM daily_institutional
+       WHERE stock_code = ?
+       ORDER BY trade_date DESC
+       LIMIT ?`
+    )
+    .bind(code, days)
+    .all();
+
+  return c.json({ ok: true, data: results });
+});
+
+// 融資融券（最近 N 日）
+stockRoutes.get("/:code/margin", async (c) => {
+  const code = c.req.param("code");
+  const days = Math.min(parseInt(c.req.query("days") ?? "60", 10) || 60, 365);
+  const db = c.env.DB;
+
+  const { results } = await db
+    .prepare(
+      `SELECT trade_date,
+              margin_buy, margin_sell, margin_redeem, margin_balance, margin_limit,
+              short_sell, short_buy, short_redeem, short_balance, short_limit
+       FROM daily_margin
+       WHERE stock_code = ?
+       ORDER BY trade_date DESC
+       LIMIT ?`
+    )
+    .bind(code, days)
+    .all();
+
+  return c.json({ ok: true, data: results });
+});
+
+// 月營收（最近 N 個月，預設 24 個月）
+stockRoutes.get("/:code/revenue", async (c) => {
+  const code = c.req.param("code");
+  const months = Math.min(parseInt(c.req.query("months") ?? "24", 10) || 24, 60);
+  const db = c.env.DB;
+
+  const { results } = await db
+    .prepare(
+      `SELECT report_year, report_month,
+              revenue, yoy_pct, mom_pct, ytd_revenue, ytd_yoy_pct
+       FROM monthly_revenue
+       WHERE stock_code = ?
+       ORDER BY report_year DESC, report_month DESC
+       LIMIT ?`
+    )
+    .bind(code, months)
+    .all();
+
+  return c.json({ ok: true, data: results });
+});
+
 stockRoutes.post("/batch-prices", async (c) => {
   const body = await c.req.json<{ stocks: string[]; date?: string }>();
   if (!body.stocks?.length) return c.json({ ok: true, data: [] });

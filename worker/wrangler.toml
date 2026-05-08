@@ -1,6 +1,7 @@
 name = "jstock-worker"
 main = "src/index.ts"
 compatibility_date = "2025-05-01"
+compatibility_flags = ["nodejs_compat"]
 
 # D1 database binding
 [[d1_databases]]
@@ -14,5 +15,7 @@ crons = [
   "30 7 * * 1-5",   # 15:30 TST — scrape ETF holdings from MoneyDJ
   "45 7 * * 1-5",   # 15:45 TST — fetch stock prices from TWSE
   "0 8 * * 1-5",    # 16:00 TST — compute holdings diffs
+  "30 8 * * 1-5",   # 16:30 TST — fetch institutional + margin (Phase B)
+  "0 4 11 * *",     # 12:00 TST every 11th — fetch monthly revenue (Phase B)
   "0 0 * * sun",    # Sunday midnight — cleanup old data
 ]

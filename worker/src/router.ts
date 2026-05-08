@@ -10,6 +10,7 @@ import { stockRoutes } from "./api/stock";
 import { chartRoutes } from "./api/chart";
 import { metaRoutes } from "./api/meta";
 import { searchRoutes } from "./api/search";
+import { adminRoutes } from "./api/admin";
 
 const app = new Hono<HonoEnv>();
 
@@ -25,6 +26,7 @@ api.route("/stocks", stockRoutes);
 api.route("/chart", chartRoutes);
 api.route("/meta", metaRoutes);
 api.route("/search", searchRoutes);
+api.route("/admin", adminRoutes);
 
 app.get("/", (c) => c.json({ name: "jstock-worker", status: "ok" }));
 

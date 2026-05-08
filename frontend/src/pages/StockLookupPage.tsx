@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { Star } from "lucide-react";
 import { useStockChartData } from "@/hooks/use-prices";
@@ -5,12 +6,26 @@ import { useStockETFs } from "@/hooks/use-stock";
 import { useFavorites } from "@/hooks/use-favorites";
 import { SyncedStockChart } from "@/components/chart/SyncedStockChart";
 import { StockETFList } from "@/components/stock/StockETFList";
+import { InstitutionalTab } from "@/components/stock/InstitutionalTab";
+import { MarginTab } from "@/components/stock/MarginTab";
+import { RevenueTab } from "@/components/stock/RevenueTab";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { EmptyState } from "@/components/ui/EmptyState";
+
+type Tab = "chart" | "institutional" | "margin" | "revenue" | "etfs";
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: "chart", label: "走勢圖" },
+  { key: "institutional", label: "三大法人" },
+  { key: "margin", label: "融資融券" },
+  { key: "revenue", label: "月營收" },
+  { key: "etfs", label: "ETF 持倉" },
+];
 
 export function StockLookupPage() {
   const { code } = useParams<{ code: string }>();
   const stockCode = code ?? "";
+  const [tab, setTab] = useState<Tab>("chart");
 
   const { prices, indicators, isLoading, isLoadingMore, loadMore } =
     useStockChartData(stockCode);
@@ -61,33 +76,53 @@ export function StockLookupPage() {
         </button>
       </div>
 
-      {/* Charts */}
-      {isLoading ? (
-        <LoadingSpinner />
-      ) : prices.length === 0 ? (
-        <EmptyState message="尚無股價資料（排程可能尚未執行）" />
-      ) : (
-        <div className="rounded-lg border border-border bg-surface-secondary p-3">
-          <SyncedStockChart
-            prices={prices}
-            indicators={indicators}
-            onLoadMore={loadMore}
-            isLoadingMore={isLoadingMore}
-          />
-        </div>
-      )}
+      {/* Tabs */}
+      <div className="mb-4 flex gap-1 border-b border-border">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`relative px-4 py-2 text-sm transition-colors ${
+              tab === t.key
+                ? "text-accent"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            {t.label}
+            {tab === t.key && (
+              <span className="absolute inset-x-0 -bottom-px h-0.5 bg-accent" />
+            )}
+          </button>
+        ))}
+      </div>
 
-      {/* ETF Holdings */}
-      {etfs && etfs.length > 0 && (
-        <div className="mt-6">
-          <h2 className="mb-3 text-base font-semibold">
-            持有此股票的 ETF ({etfs.length})
-          </h2>
-          <div className="rounded-lg border border-border bg-surface-secondary p-4">
+      {/* Tab body */}
+      <div className="rounded-lg border border-border bg-surface-secondary p-3">
+        {tab === "chart" &&
+          (isLoading ? (
+            <LoadingSpinner />
+          ) : prices.length === 0 ? (
+            <EmptyState message="尚無股價資料（排程可能尚未執行）" />
+          ) : (
+            <SyncedStockChart
+              prices={prices}
+              indicators={indicators}
+              onLoadMore={loadMore}
+              isLoadingMore={isLoadingMore}
+            />
+          ))}
+
+        {tab === "institutional" && <InstitutionalTab code={stockCode} />}
+        {tab === "margin" && <MarginTab code={stockCode} />}
+        {tab === "revenue" && <RevenueTab code={stockCode} />}
+
+        {tab === "etfs" &&
+          (etfs && etfs.length > 0 ? (
             <StockETFList etfs={etfs} />
-          </div>
-        </div>
-      )}
+          ) : (
+            <EmptyState message="此股票目前未被任何 ETF 持有（或尚無持倉資料）" />
+          ))}
+      </div>
     </div>
   );
 }
