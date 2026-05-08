@@ -1,0 +1,190 @@
+// 從 TWSE ISIN 頁抓全市場上市/上櫃 股票 + ETF 清單，
+// 產出 migrations/0004_seed_stocks_etfs.sql
+//
+// 用法：
+//   cd worker && node scripts/seed-stocks.mjs
+//   wrangler d1 execute jstock-db --local  --file=./migrations/0004_seed_stocks_etfs.sql
+//   wrangler d1 execute jstock-db --remote --file=./migrations/0004_seed_stocks_etfs.sql
+//
+// 依賴：iconv-lite（big5 解碼）
+
+import { writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+import iconv from "iconv-lite";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const OUT_PATH = resolve(__dirname, "../migrations/0004_seed_stocks_etfs.sql");
+
+const SOURCES = [
+  { url: "https://isin.twse.com.tw/isin/C_public.jsp?strMode=2", market: "TWSE" }, // 上市
+  { url: "https://isin.twse.com.tw/isin/C_public.jsp?strMode=4", market: "TPEX" }, // 上櫃
+];
+
+async function fetchBig5(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status} on ${url}`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  return iconv.decode(buf, "big5");
+}
+
+function parseIsinPage(html, market) {
+  const stocks = [];
+  const etfs = [];
+
+  // 抓 <tr> 區塊（含 colspan section header + 7 欄資料 row）
+  const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  const tdRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+
+  let section = null;
+  let m;
+  while ((m = rowRe.exec(html)) !== null) {
+    const tds = [...m[1].matchAll(tdRe)].map((t) =>
+      t[1].replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").trim()
+    );
+
+    // section header: <td colspan="7">　股票　</td>
+    if (tds.length === 1 && /colspan/i.test(m[1])) {
+      section = tds[0].replace(/[\s　]/g, "");
+      continue;
+    }
+
+    if (tds.length < 6) continue;
+    if (!section) continue;
+    if (tds[0] === "有價證券代號及名稱") continue; // header row
+
+    const codeNameRaw = tds[0];
+    const parts = codeNameRaw.split(/[\s　]+/);
+    if (parts.length < 2) continue;
+    const code = parts[0];
+    const name = parts.slice(1).join(" ");
+    if (!/^[0-9A-Z]{4,7}$/i.test(code)) continue;
+
+    const row = {
+      code,
+      name,
+      isin: tds[1] || null,
+      listed_date: normalizeDate(tds[2]),
+      market_text: tds[3] || null,
+      industry: tds[4] || null,
+      cfi: tds[5] || null,
+    };
+
+    if (section === "股票") {
+      stocks.push({ ...row, market });
+    } else if (section === "ETF") {
+      etfs.push({ ...row, market });
+    }
+    // 其他區段（特別股、TDR、ETN、權證、受益證券…）暫不收
+  }
+
+  return { stocks, etfs };
+}
+
+function normalizeDate(s) {
+  if (!s) return null;
+  const m = s.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  if (!m) return null;
+  return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+}
+
+function inferEtfType(name) {
+  if (/反\s*[一二三四1234]\s*倍/.test(name) || /反向/.test(name)) return "inverse";
+  if (/正\s*[一二三四1234]\s*倍/.test(name)) return "leverage";
+  if (/債(券|金)?/.test(name)) return "bond";
+  if (/主動/.test(name)) return "active";
+  return "passive";
+}
+
+function sqlEscape(s) {
+  if (s === null || s === undefined) return "NULL";
+  return `'${String(s).replace(/'/g, "''")}'`;
+}
+
+function buildInsertStocks(rows) {
+  const lines = [];
+  for (const r of rows) {
+    lines.push(
+      `INSERT OR REPLACE INTO stocks (stock_code, stock_name, market, industry, isin, listed_date, cfi_code) VALUES (` +
+        [r.code, r.name, r.market, r.industry, r.isin, r.listed_date, r.cfi]
+          .map(sqlEscape)
+          .join(", ") +
+        `);`
+    );
+  }
+  return lines.join("\n");
+}
+
+function buildInsertEtfs(rows) {
+  // 不覆蓋現有 19 檔（已透過 0002 灌入，etf_type='active'）
+  // 新進的 ETF 用啟發式推 etf_type
+  const lines = [];
+  for (const r of rows) {
+    const type = inferEtfType(r.name);
+    const issuer = guessIssuer(r.name);
+    lines.push(
+      `INSERT OR IGNORE INTO etfs (etf_code, etf_name, issuer, group_tag, etf_type, listed_date, market) VALUES (` +
+        [r.code, r.name, issuer, "tw", type, r.listed_date, r.market]
+          .map(sqlEscape)
+          .join(", ") +
+        `);`
+    );
+  }
+  return lines.join("\n");
+}
+
+function guessIssuer(name) {
+  const map = [
+    ["元大", "元大投信"],
+    ["國泰", "國泰投信"],
+    ["群益", "群益投信"],
+    ["復華", "復華投信"],
+    ["中信", "中信投信"],
+    ["台新", "台新投信"],
+    ["統一", "統一投信"],
+    ["兆豐", "兆豐投信"],
+    ["野村", "野村投信"],
+    ["凱基", "凱基投信"],
+    ["富邦", "富邦投信"],
+    ["永豐", "永豐投信"],
+    ["新光", "新光投信"],
+    ["第一金", "第一金投信"],
+    ["大華銀", "大華銀投信"],
+    ["FH", "復華投信"],
+  ];
+  for (const [k, v] of map) if (name.includes(k)) return v;
+  return "未知";
+}
+
+async function main() {
+  let allStocks = [];
+  let allEtfs = [];
+  for (const src of SOURCES) {
+    process.stderr.write(`fetching ${src.market} from ${src.url}\n`);
+    const html = await fetchBig5(src.url);
+    const { stocks, etfs } = parseIsinPage(html, src.market);
+    process.stderr.write(`  parsed: ${stocks.length} stocks, ${etfs.length} etfs\n`);
+    allStocks.push(...stocks);
+    allEtfs.push(...etfs);
+  }
+
+  const sql = [
+    `-- Auto-generated by worker/scripts/seed-stocks.mjs`,
+    `-- Generated: ${new Date().toISOString()}`,
+    `-- Stocks: ${allStocks.length} | ETFs: ${allEtfs.length}`,
+    ``,
+    buildInsertStocks(allStocks),
+    ``,
+    buildInsertEtfs(allEtfs),
+    ``,
+  ].join("\n");
+
+  writeFileSync(OUT_PATH, sql, "utf8");
+  process.stderr.write(`wrote ${OUT_PATH}\n`);
+  process.stderr.write(`  ${allStocks.length} stocks + ${allEtfs.length} etfs\n`);
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

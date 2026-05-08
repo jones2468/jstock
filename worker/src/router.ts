@@ -9,6 +9,7 @@ import { overlapRoutes } from "./api/overlap";
 import { stockRoutes } from "./api/stock";
 import { chartRoutes } from "./api/chart";
 import { metaRoutes } from "./api/meta";
+import { searchRoutes } from "./api/search";
 
 const app = new Hono<HonoEnv>();
 
@@ -23,6 +24,7 @@ api.route("/overlap", overlapRoutes);
 api.route("/stocks", stockRoutes);
 api.route("/chart", chartRoutes);
 api.route("/meta", metaRoutes);
+api.route("/search", searchRoutes);
 
 app.get("/", (c) => c.json({ name: "jstock-worker", status: "ok" }));
 
