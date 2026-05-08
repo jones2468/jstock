@@ -1,6 +1,3 @@
-// 手動觸發 cron 任務（用於部署後驗證 / 補抓資料）
-// 不上認證 — 假設只在開發/Phase B 上線初期用，之後可加 token
-
 import { Hono } from "hono";
 import type { HonoEnv } from "../env";
 import { runFetchInstitutionalMargin } from "../cron/fetch-institutional-margin";
@@ -13,6 +10,16 @@ import { fetchMonthlyRevenue } from "../data-sources/mops";
 import type { Env } from "../env";
 
 export const adminRoutes = new Hono<HonoEnv>();
+
+adminRoutes.use("/*", async (c, next) => {
+  const token = c.env.ADMIN_TOKEN;
+  if (!token) return await next();
+  const auth = c.req.header("Authorization");
+  if (auth !== `Bearer ${token}`) {
+    return c.json({ ok: false, error: "unauthorized" }, 401);
+  }
+  return await next();
+});
 
 adminRoutes.post("/run/scrape-holdings", async (c) => {
   const offset = parseInt(c.req.query("offset") ?? "0", 10);
