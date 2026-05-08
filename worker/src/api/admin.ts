@@ -5,15 +5,46 @@ import { Hono } from "hono";
 import type { HonoEnv } from "../env";
 import { runFetchInstitutionalMargin } from "../cron/fetch-institutional-margin";
 import { runFetchRevenue } from "../cron/fetch-revenue";
-import { runScrapeHoldings } from "../cron/scrape-holdings";
+import {
+  runScrapeHoldings,
+  runScrapeHoldingsBatch,
+} from "../cron/scrape-holdings";
 import { fetchMonthlyRevenue } from "../data-sources/mops";
 import type { Env } from "../env";
 
 export const adminRoutes = new Hono<HonoEnv>();
 
 adminRoutes.post("/run/scrape-holdings", async (c) => {
-  await runScrapeHoldings(c.env as unknown as Env);
-  return c.json({ ok: true });
+  const offset = parseInt(c.req.query("offset") ?? "0", 10);
+  const result = await runScrapeHoldingsBatch(c.env as unknown as Env, offset);
+  return c.json({ ok: true, ...result, offset });
+});
+
+
+adminRoutes.get("/stats/holdings", async (c) => {
+  const db = c.env.DB;
+  const etfCount = await db
+    .prepare(`SELECT COUNT(DISTINCT etf_code) as n FROM holdings_snapshots WHERE snapshot_date = (SELECT MAX(snapshot_date) FROM holdings_snapshots)`)
+    .first<{ n: number }>();
+  const totalRows = await db
+    .prepare(`SELECT COUNT(*) as n FROM holdings_snapshots WHERE snapshot_date = (SELECT MAX(snapshot_date) FROM holdings_snapshots)`)
+    .first<{ n: number }>();
+  const maxDate = await db
+    .prepare(`SELECT MAX(snapshot_date) as d FROM holdings_snapshots`)
+    .first<{ d: string }>();
+  const etfsByType = await db
+    .prepare(`SELECT etf_type, COUNT(*) as n FROM etfs GROUP BY etf_type`)
+    .all();
+  const lastRun = await db
+    .prepare(`SELECT * FROM cron_runs WHERE job_name = 'scrape_holdings' ORDER BY run_date DESC LIMIT 1`)
+    .first();
+  return c.json({
+    snapshot_date: maxDate?.d,
+    etfs_scraped: etfCount?.n,
+    etfs_by_type: etfsByType?.results,
+    holdings_rows: totalRows?.n,
+    last_run: lastRun,
+  });
 });
 
 adminRoutes.post("/run/institutional-margin", async (c) => {

@@ -1,5 +1,4 @@
 import type { Env } from "../env";
-import { runScrapeHoldings } from "./scrape-holdings";
 import { runComputeDiffs } from "./compute-diffs";
 import { runFetchPrices } from "./fetch-prices";
 import { runFetchInstitutionalMargin } from "./fetch-institutional-margin";
@@ -10,10 +9,6 @@ export async function handleCron(cron: string, env: Env): Promise<void> {
   console.log(`[cron] triggered: ${cron}`);
 
   switch (cron) {
-    case "30 7 * * 1-5":
-      await runScrapeHoldings(env);
-      break;
-
     case "45 7 * * 1-5":
       await runFetchPrices(env);
       break;
