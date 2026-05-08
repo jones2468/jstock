@@ -20,6 +20,7 @@ export async function handleCron(cron: string, env: Env): Promise<void> {
 
     case "0 8 * * 1-5":
       await runComputeDiffs(env);
+      await runCleanup(env);
       break;
 
     case "30 8 * * 1-5":
@@ -28,11 +29,6 @@ export async function handleCron(cron: string, env: Env): Promise<void> {
 
     case "0 4 11 * *":
       await runFetchRevenue(env);
-      break;
-
-    case "0 0 * * 0":
-    case "0 0 * * sun":
-      await runCleanup(env);
       break;
 
     default:

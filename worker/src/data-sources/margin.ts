@@ -1,9 +1,7 @@
 // 融資融券：TWSE 上市 + TPEX 上櫃
-// TWSE OpenAPI 信用交易個股統計
-// TPEX OpenAPI 上櫃融資融券餘額
 
 const TWSE_MARGIN = "https://openapi.twse.com.tw/v1/exchangeReport/MI_MARGN";
-const TPEX_MARGIN = "https://www.tpex.org.tw/openapi/v1/tpex_margin_balance";
+const TPEX_MARGIN = "https://www.tpex.org.tw/www/zh-tw/margin/balance?response=json";
 
 export interface MarginRow {
   trade_date: string;
@@ -30,6 +28,7 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+// TWSE: key-value JSON objects with Chinese field names
 export async function fetchTWSEMargin(): Promise<MarginRow[]> {
   const res = await fetch(TWSE_MARGIN, { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error(`TWSE MI_MARGN: HTTP ${res.status}`);
@@ -42,8 +41,6 @@ export async function fetchTWSEMargin(): Promise<MarginRow[]> {
     .filter((r) => r["股票代號"] || r.Code)
     .map((r) => {
       const code = (r["股票代號"] ?? r.Code ?? "").toString().trim();
-      // TWSE MI_MARGN 中文欄位：融資買進、融資賣出、現金償還、前日餘額、今日餘額、限額
-      // 同樣有融券：融券賣出、融券買進、現券償還、前日餘額、今日餘額、限額
       return {
         trade_date: date,
         stock_code: code,
@@ -62,34 +59,33 @@ export async function fetchTWSEMargin(): Promise<MarginRow[]> {
     .filter((r) => r.stock_code);
 }
 
+// TPEX: tables[0].fields + data (array-of-arrays)
+// fields: [0]代號, [3]資買, [4]資賣, [5]現償, [6]資餘額, [9]資限額,
+//         [11]券賣, [12]券買, [13]券償, [14]券餘額, [17]券限額
 export async function fetchTPEXMargin(): Promise<MarginRow[]> {
   const res = await fetch(TPEX_MARGIN, { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error(`TPEX margin: HTTP ${res.status}`);
-  const raw = (await res.json()) as any[];
-  if (!Array.isArray(raw) || raw.length === 0) return [];
+  const json = (await res.json()) as any;
+  const table = json?.tables?.[0];
+  if (!table || !Array.isArray(table.data)) return [];
 
   const date = todayIso();
 
-  return raw
-    .filter((r) => r["代號"] || r.SecuritiesCompanyCode || r.Code)
-    .map((r) => {
-      const code = (r["代號"] ?? r.SecuritiesCompanyCode ?? r.Code ?? "")
-        .toString()
-        .trim();
-      return {
-        trade_date: date,
-        stock_code: code,
-        margin_buy: parseInt0(r["融資買進"]),
-        margin_sell: parseInt0(r["融資賣出"]),
-        margin_redeem: parseInt0(r["融資現金償還"]),
-        margin_balance: parseInt0(r["融資今日餘額"]),
-        margin_limit: parseInt0(r["融資限額"]),
-        short_sell: parseInt0(r["融券賣出"]),
-        short_buy: parseInt0(r["融券買進"]),
-        short_redeem: parseInt0(r["融券現券償還"]),
-        short_balance: parseInt0(r["融券今日餘額"]),
-        short_limit: parseInt0(r["融券限額"]),
-      };
-    })
-    .filter((r) => r.stock_code);
+  return table.data
+    .filter((row: string[]) => row[0] && /^\d{4,6}/.test(row[0].trim()))
+    .map((row: string[]) => ({
+      trade_date: date,
+      stock_code: row[0].trim(),
+      margin_buy: parseInt0(row[3]),
+      margin_sell: parseInt0(row[4]),
+      margin_redeem: parseInt0(row[5]),
+      margin_balance: parseInt0(row[6]),
+      margin_limit: parseInt0(row[9]),
+      short_sell: parseInt0(row[11]),
+      short_buy: parseInt0(row[12]),
+      short_redeem: parseInt0(row[13]),
+      short_balance: parseInt0(row[14]),
+      short_limit: parseInt0(row[17]),
+    }))
+    .filter((r: MarginRow) => r.stock_code);
 }

@@ -1,8 +1,7 @@
 // 三大法人買賣超：TWSE 上市 + TPEX 上櫃
-// TWSE OpenAPI 回傳當日全市場 JSON 陣列；TPEX 同樣
 
-const TWSE_T86 = "https://openapi.twse.com.tw/v1/fund/T86";
-const TPEX_T86 = "https://www.tpex.org.tw/openapi/v1/tpex_3insti_daily_trading";
+const TWSE_T86 = "https://www.twse.com.tw/rwd/zh/fund/T86?response=json&selectType=ALL";
+const TPEX_3INSTI = "https://www.tpex.org.tw/openapi/v1/tpex_3insti_daily_trading";
 
 export interface InstitutionalRow {
   trade_date: string;
@@ -25,87 +24,43 @@ function parseInt0(s: unknown): number | null {
   return isNaN(n) ? null : n;
 }
 
-// 取最近交易日（今日，若回傳空則往前一天）
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function sumNullable(...vals: (number | null)[]): number | null {
+  const nums = vals.filter((v): v is number => v !== null);
+  return nums.length > 0 ? nums.reduce((a, b) => a + b, 0) : null;
+}
+
+// TWSE: fields + data (array-of-arrays) format
+// fields[0]=證券代號, [2]=外陸資買進(不含外資自營商), [3]=賣出, [4]=買賣超,
+// [8]=投信買進, [9]=投信賣出, [10]=投信買賣超,
+// [12]=自營商買進(自行買賣), [13]=賣出(自行買賣), [15]=買進(避險), [16]=賣出(避險),
+// [18]=三大法人買賣超
 export async function fetchTWSEInstitutional(): Promise<InstitutionalRow[]> {
   const res = await fetch(TWSE_T86, { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error(`TWSE T86: HTTP ${res.status}`);
-  const raw = (await res.json()) as any[];
-  if (!Array.isArray(raw) || raw.length === 0) return [];
+  const json = (await res.json()) as any;
+  if (json.stat !== "OK" || !Array.isArray(json.data)) return [];
 
   const date = todayIso();
 
-  return raw
-    .filter((r) => r["證券代號"] || r.Code)
-    .map((r) => {
-      const code = (r["證券代號"] ?? r.Code ?? "").toString().trim();
-      // TWSE 欄位名稱中文版：外陸資買進股數(不含外資自營商) / 外陸資賣出股數... / 外陸資買賣超股數
-      const fb = parseInt0(r["外陸資買進股數(不含外資自營商)"] ?? r.ForeignInvestor_Bought);
-      const fs = parseInt0(r["外陸資賣出股數(不含外資自營商)"] ?? r.ForeignInvestor_Sold);
-      const fn = parseInt0(r["外陸資買賣超股數(不含外資自營商)"] ?? r.ForeignInvestor_NetBuySell);
-      const ib = parseInt0(r["投信買進股數"] ?? r.TrustBought);
-      const is = parseInt0(r["投信賣出股數"] ?? r.TrustSold);
-      const ineta = parseInt0(r["投信買賣超股數"] ?? r.TrustNetBuySell);
-      // 自營商分自行買賣 + 避險，這裡合併
-      const db1 = parseInt0(r["自營商買進股數(自行買賣)"]);
-      const db2 = parseInt0(r["自營商買進股數(避險)"]);
-      const ds1 = parseInt0(r["自營商賣出股數(自行買賣)"]);
-      const ds2 = parseInt0(r["自營商賣出股數(避險)"]);
-      const dn1 = parseInt0(r["自營商買賣超股數(自行買賣)"]);
-      const dn2 = parseInt0(r["自營商買賣超股數(避險)"]);
-      const dealerBuy = sumNullable(db1, db2);
-      const dealerSell = sumNullable(ds1, ds2);
-      const dealerNet = sumNullable(dn1, dn2);
-      const totalNet = parseInt0(r["三大法人買賣超股數"] ?? r.TotalNetBuySell);
-
-      return {
-        trade_date: date,
-        stock_code: code,
-        foreign_buy: fb,
-        foreign_sell: fs,
-        foreign_net: fn,
-        invest_buy: ib,
-        invest_sell: is,
-        invest_net: ineta,
-        dealer_buy: dealerBuy,
-        dealer_sell: dealerSell,
-        dealer_net: dealerNet,
-        total_net: totalNet,
-      };
-    })
-    .filter((r) => r.stock_code);
-}
-
-export async function fetchTPEXInstitutional(): Promise<InstitutionalRow[]> {
-  const res = await fetch(TPEX_T86, { headers: { Accept: "application/json" } });
-  if (!res.ok) throw new Error(`TPEX 3insti: HTTP ${res.status}`);
-  const raw = (await res.json()) as any[];
-  if (!Array.isArray(raw) || raw.length === 0) return [];
-
-  const date = todayIso();
-
-  return raw
-    .filter((r) => r["代號"] || r.SecuritiesCompanyCode || r.Code)
-    .map((r) => {
-      const code = (r["代號"] ?? r.SecuritiesCompanyCode ?? r.Code ?? "")
-        .toString()
-        .trim();
-      const fb = parseInt0(r["外資及陸資(不含自營商)買進股數"]);
-      const fs = parseInt0(r["外資及陸資(不含自營商)賣出股數"]);
-      const fn = parseInt0(r["外資及陸資(不含自營商)買賣超股數"]);
-      const ib = parseInt0(r["投信買進股數"]);
-      const is_ = parseInt0(r["投信賣出股數"]);
-      const ineta = parseInt0(r["投信買賣超股數"]);
-      const db1 = parseInt0(r["自營商(自行買賣)買進股數"]);
-      const db2 = parseInt0(r["自營商(避險)買進股數"]);
-      const ds1 = parseInt0(r["自營商(自行買賣)賣出股數"]);
-      const ds2 = parseInt0(r["自營商(避險)賣出股數"]);
-      const dn1 = parseInt0(r["自營商(自行買賣)買賣超股數"]);
-      const dn2 = parseInt0(r["自營商(避險)買賣超股數"]);
-      const totalNet = parseInt0(r["三大法人買賣超股數合計"]);
+  return json.data
+    .filter((row: string[]) => row[0] && /^\d{4,6}/.test(row[0].trim()))
+    .map((row: string[]) => {
+      const code = row[0].trim();
+      const fb = parseInt0(row[2]);
+      const fs = parseInt0(row[3]);
+      const fn = parseInt0(row[4]);
+      const ib = parseInt0(row[8]);
+      const is_ = parseInt0(row[9]);
+      const ineta = parseInt0(row[10]);
+      const db1 = parseInt0(row[12]); // 自行買賣 買進
+      const ds1 = parseInt0(row[13]); // 自行買賣 賣出
+      const db2 = parseInt0(row[15]); // 避險 買進
+      const ds2 = parseInt0(row[16]); // 避險 賣出
+      const totalNet = parseInt0(row[18]);
 
       return {
         trade_date: date,
@@ -118,14 +73,42 @@ export async function fetchTPEXInstitutional(): Promise<InstitutionalRow[]> {
         invest_net: ineta,
         dealer_buy: sumNullable(db1, db2),
         dealer_sell: sumNullable(ds1, ds2),
-        dealer_net: sumNullable(dn1, dn2),
+        dealer_net: sumNullable(parseInt0(row[14]), parseInt0(row[17])),
         total_net: totalNet,
       };
     })
-    .filter((r) => r.stock_code);
+    .filter((r: InstitutionalRow) => r.stock_code);
 }
 
-function sumNullable(...vals: (number | null)[]): number | null {
-  const nums = vals.filter((v): v is number => v !== null);
-  return nums.length > 0 ? nums.reduce((a, b) => a + b, 0) : null;
+// TPEX: key-value JSON objects with English field names
+export async function fetchTPEXInstitutional(): Promise<InstitutionalRow[]> {
+  const res = await fetch(TPEX_3INSTI, { headers: { Accept: "application/json" } });
+  if (!res.ok) throw new Error(`TPEX 3insti: HTTP ${res.status}`);
+  const raw = (await res.json()) as any[];
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+
+  const date = todayIso();
+
+  return raw
+    .filter((r) => r.SecuritiesCompanyCode && /^\d{4,6}/.test(r.SecuritiesCompanyCode.trim()))
+    .map((r) => {
+      const code = r.SecuritiesCompanyCode.trim();
+      const v = (key: string) => parseInt0(r[key]);
+
+      return {
+        trade_date: date,
+        stock_code: code,
+        foreign_buy: v("ForeignInvestorsIncludeMainlandAreaInvestors-TotalBuy"),
+        foreign_sell: v("ForeignInvestorsIncludeMainlandAreaInvestors-TotalSell"),
+        foreign_net: v("ForeignInvestorsIncludeMainlandAreaInvestors-Difference"),
+        invest_buy: v("SecuritiesInvestmentTrustCompanies-TotalBuy"),
+        invest_sell: v("SecuritiesInvestmentTrustCompanies-TotalSell"),
+        invest_net: v("SecuritiesInvestmentTrustCompanies-Difference"),
+        dealer_buy: v("Dealers-TotalBuy"),
+        dealer_sell: v("Dealers-TotalSell"),
+        dealer_net: v("Dealers-Difference"),
+        total_net: v("TotalDifference"),
+      };
+    })
+    .filter((r) => r.stock_code);
 }

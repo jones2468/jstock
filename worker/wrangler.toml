@@ -14,8 +14,7 @@ database_id = "0b59fb31-171d-45d5-ba21-b9539a7c830d"
 crons = [
   "30 7 * * 1-5",   # 15:30 TST — scrape ETF holdings from MoneyDJ
   "45 7 * * 1-5",   # 15:45 TST — fetch stock prices from TWSE
-  "0 8 * * 1-5",    # 16:00 TST — compute holdings diffs
+  "0 8 * * 1-5",    # 16:00 TST — compute holdings diffs + cleanup old data
   "30 8 * * 1-5",   # 16:30 TST — fetch institutional + margin (Phase B)
   "0 4 11 * *",     # 12:00 TST every 11th — fetch monthly revenue (Phase B)
-  "0 0 * * sun",    # Sunday midnight — cleanup old data
 ]

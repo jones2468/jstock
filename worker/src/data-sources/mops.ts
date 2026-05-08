@@ -6,10 +6,10 @@
 import iconv from "iconv-lite";
 
 const TWSE_REVENUE = (rocY: number, month: number) =>
-  `https://mops.twse.com.tw/nas/t21/sii/t21sc03_${rocY}_${month}_0.html`;
+  `https://mopsov.twse.com.tw/nas/t21/sii/t21sc03_${rocY}_${month}_0.html`;
 
 const TPEX_REVENUE = (rocY: number, month: number) =>
-  `https://mops.twse.com.tw/nas/t21/otc/t21sc03_${rocY}_${month}_0.html`;
+  `https://mopsov.twse.com.tw/nas/t21/otc/t21sc03_${rocY}_${month}_0.html`;
 
 export interface RevenueRow {
   report_year: number;
