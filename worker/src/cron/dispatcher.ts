@@ -25,9 +25,7 @@ export async function handleCron(cron: string, env: Env): Promise<void> {
 
     case "0 4 11 * *":
       await runFetchRevenue(env);
-      break;
-
-    case "0 4 16 1,4,5,8,11 *":
+      // 季 EPS 搭月營收一起跑（每月檢查，季報公告月才有新資料）
       await runFetchEPS(env);
       break;
 
