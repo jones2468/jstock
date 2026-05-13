@@ -1,11 +1,8 @@
-// 季 EPS：公開資訊觀測站（MOPS）綜合損益表
-// t163sb04 — 個別公司，欄位較完整
-// t163sb06 — 簡易版，fallback
-// HTML big5 編碼
+// 季 EPS：FinMind API + TWSE BWIBBU_ALL fallback
+// FinMind 提供每股盈餘 (EPS) + 營收 + 稅前淨利等財務科目
+// BWIBBU_ALL 提供即時本益比（作為 cross-validation）
 
-import iconv from "iconv-lite";
-
-const MOPS_URL = "https://mops.twse.com.tw/mops/web/ajax_t163sb04";
+import { FINMIND_API } from "@jstock/shared";
 
 export interface QuarterlyEPSRow {
   stock_code: string;
@@ -18,159 +15,136 @@ export interface QuarterlyEPSRow {
   net_income: number | null;
 }
 
-/**
- * 抓某一季的全市場季 EPS（上市 + 上櫃）
- */
-export async function fetchQuarterlyEPS(
-  year: number,
-  quarter: number
-): Promise<QuarterlyEPSRow[]> {
-  const rocYear = year - 1911;
-  const [twse, tpex] = await Promise.all([
-    fetchMOPSTable("sii", rocYear, quarter, year).catch((e) => {
-      console.error(`[eps] TWSE fetch failed: ${(e as Error).message}`);
-      return [] as QuarterlyEPSRow[];
-    }),
-    fetchMOPSTable("otc", rocYear, quarter, year).catch((e) => {
-      console.error(`[eps] TPEX fetch failed: ${(e as Error).message}`);
-      return [] as QuarterlyEPSRow[];
-    }),
-  ]);
-  return [...twse, ...tpex];
+interface FinMindRow {
+  date: string;
+  stock_id: string;
+  type: string;
+  value: number;
 }
 
-async function fetchMOPSTable(
-  typek: string,
-  rocYear: number,
-  quarter: number,
-  year: number
+/**
+ * 用 FinMind 抓單一股票的季度財務數據
+ */
+export async function fetchStockEPS(
+  stockCode: string,
+  startDate: string = "2023-01-01"
 ): Promise<QuarterlyEPSRow[]> {
-  const body = new URLSearchParams({
-    encodeURIComponent: "1",
-    step: "1",
-    firstin: "1",
-    off: "1",
-    TYPEK: typek,
-    year: String(rocYear),
-    season: String(quarter),
+  const url = `${FINMIND_API}?dataset=TaiwanStockFinancialStatements&data_id=${stockCode}&start_date=${startDate}`;
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0 (jstock-worker)" },
   });
 
-  const res = await fetch(MOPS_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": "Mozilla/5.0 (jstock-worker)",
-      Accept: "text/html",
-    },
-    body: body.toString(),
-  });
+  if (!res.ok) throw new Error(`FinMind: HTTP ${res.status} for ${stockCode}`);
 
-  if (!res.ok) throw new Error(`MOPS EPS: HTTP ${res.status} for ${typek}`);
+  const json = (await res.json()) as { status: number; data: FinMindRow[] };
+  if (!json.data?.length) return [];
 
-  const buf = new Uint8Array(await res.arrayBuffer());
-  // MOPS ajax response 有時是 utf-8，有時是 big5；先嘗試 utf-8 再 fallback
-  let html: string;
-  try {
-    html = new TextDecoder("utf-8").decode(buf);
-    // 如果有亂碼特徵（常見 big5 雙字節被 utf8 解爛），改用 big5
-    if (html.includes("�") || html.includes("�")) {
-      html = iconv.decode(buf as any, "big5");
-    }
-  } catch {
-    html = iconv.decode(buf as any, "big5");
+  // FinMind 回傳多種 type（Revenue, EPS, PreTaxIncome, OperatingIncome, IncomeAfterTaxes 等）
+  // 按日期分組，每組就是一季
+  const byDate = new Map<string, Map<string, number>>();
+  for (const row of json.data) {
+    if (!byDate.has(row.date)) byDate.set(row.date, new Map());
+    byDate.get(row.date)!.set(row.type, row.value);
   }
 
-  return parseEPSHtml(html, year, quarter);
-}
+  const results: QuarterlyEPSRow[] = [];
+  for (const [dateStr, types] of byDate) {
+    const { year, quarter } = dateToYearQuarter(dateStr);
+    if (!year || !quarter) continue;
 
-/**
- * MOPS t163sb04 表格結構：
- * 每個產業一個 table，每 row 有多欄。
- * 關鍵欄位（依序）：
- *   公司代號、公司名稱、
- *   營業收入、營業成本、營業毛利、營業費用、營業利益、
- *   營業外收入及支出、稅前淨利、所得稅費用、本期淨利、
- *   基本每股盈餘(元)
- *
- * 注意：不同產業 table 欄數可能不同（金控/銀行欄位不同）
- * 我們用「找到 4~6 碼數字的 row → 從尾部取 EPS」的策略
- */
-function parseEPSHtml(
-  html: string,
-  year: number,
-  quarter: number
-): QuarterlyEPSRow[] {
-  const rows: QuarterlyEPSRow[] = [];
-  const rowRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-  const tdRe = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+    const eps = types.get("EPS") ?? null;
+    // 只保留有 EPS 的季度
+    if (eps === null) continue;
 
-  let m;
-  while ((m = rowRe.exec(html)) !== null) {
-    const tds = [...m[1].matchAll(tdRe)].map((t) =>
-      t[1]
-        .replace(/<[^>]+>/g, "")
-        .replace(/&nbsp;/g, " ")
-        .replace(/&amp;/g, "&")
-        .trim()
-    );
-
-    if (tds.length < 8) continue;
-
-    // 第一欄要是 4~6 碼數字（股票代號）
-    const code = tds[0].trim();
-    if (!/^[0-9]{4,6}$/.test(code)) continue;
-
-    // 從尾部找 EPS（通常是最後一欄或倒數第二欄）
-    // 先嘗試找「基本每股盈餘」：從後往前找第一個像數字的欄位
-    const eps = findEPS(tds);
-
-    // 營收、營業利益、稅前淨利、本期淨利通常是 index 2, 6, 8, 10 附近
-    // 但欄數不固定，用保守策略
-    const revenue = parseNum(tds[2]);
-    const operating_income = tds.length >= 7 ? parseNum(tds[6]) : null;
-    const pre_tax_income = tds.length >= 9 ? parseNum(tds[8]) : null;
-    const net_income = tds.length >= 11 ? parseNum(tds[10]) : null;
-
-    rows.push({
-      stock_code: code,
+    results.push({
+      stock_code: stockCode,
       report_year: year,
       report_quarter: quarter,
       eps,
-      revenue,
-      operating_income,
-      pre_tax_income,
-      net_income,
+      revenue: types.get("Revenue") ?? null,
+      operating_income: types.get("OperatingIncome") ?? null,
+      pre_tax_income: types.get("PreTaxIncome") ?? null,
+      net_income: types.get("IncomeAfterTaxes") ?? null,
     });
   }
 
-  return rows;
+  return results.sort(
+    (a, b) => a.report_year - b.report_year || a.report_quarter - b.report_quarter
+  );
 }
 
 /**
- * 從 td 陣列的尾部找 EPS 值
- * MOPS 的基本每股盈餘通常是最後一欄（或倒數第二欄是「稀釋每股盈餘」）
- * EPS 的特徵：小數點數值、通常 -999 ~ 999 之間
+ * 批量抓多支股票的 EPS（帶 rate limit 控制）
  */
-function findEPS(tds: string[]): number | null {
-  // 從尾部往前找（最多看 3 欄）
-  for (let i = tds.length - 1; i >= Math.max(0, tds.length - 3); i--) {
-    const val = parseNum(tds[i]);
-    if (val !== null && Math.abs(val) < 9999) {
-      return val;
+export async function fetchBatchEPS(
+  stockCodes: string[],
+  startDate: string = "2023-01-01",
+  delayMs: number = 300
+): Promise<QuarterlyEPSRow[]> {
+  const all: QuarterlyEPSRow[] = [];
+
+  for (let i = 0; i < stockCodes.length; i++) {
+    const code = stockCodes[i];
+    try {
+      const rows = await fetchStockEPS(code, startDate);
+      all.push(...rows);
+      if (i % 50 === 0 && i > 0) {
+        console.log(`[eps] progress: ${i}/${stockCodes.length} (${all.length} rows)`);
+      }
+    } catch (e) {
+      console.error(`[eps] ${code} failed: ${(e as Error).message}`);
+    }
+
+    // Rate limit: FinMind free tier 限 200 req/min
+    if (delayMs > 0 && i < stockCodes.length - 1) {
+      await new Promise((r) => setTimeout(r, delayMs));
     }
   }
-  return null;
+
+  return all;
 }
 
-function parseNum(s: string | undefined): number | null {
-  if (!s) return null;
-  const t = s
-    .replace(/,/g, "")
-    .replace(/[^\d.\-]/g, "")
-    .trim();
-  if (t === "" || t === "-") return null;
-  const n = parseFloat(t);
-  return isNaN(n) ? null : n;
+/**
+ * 用 TWSE BWIBBU_ALL 抓即時本益比（所有上市股）
+ * 回傳 Map<stock_code, pe_ratio>
+ */
+export async function fetchCurrentPERatios(): Promise<Map<string, number>> {
+  const res = await fetch(
+    "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL",
+    { headers: { "User-Agent": "Mozilla/5.0 (jstock-worker)" } }
+  );
+  if (!res.ok) throw new Error(`BWIBBU_ALL: HTTP ${res.status}`);
+
+  const data = (await res.json()) as Array<{
+    Code: string;
+    PEratio: string;
+  }>;
+
+  const map = new Map<string, number>();
+  for (const row of data) {
+    const pe = parseFloat(row.PEratio);
+    if (!isNaN(pe) && pe > 0) {
+      map.set(row.Code, pe);
+    }
+  }
+  return map;
+}
+
+function dateToYearQuarter(dateStr: string): {
+  year: number | null;
+  quarter: number | null;
+} {
+  // FinMind date format: "2024-03-31", "2024-06-30", "2024-09-30", "2024-12-31"
+  const parts = dateStr.split("-");
+  if (parts.length < 2) return { year: null, quarter: null };
+
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10);
+
+  const quarter =
+    month <= 3 ? 1 : month <= 6 ? 2 : month <= 9 ? 3 : month <= 12 ? 4 : null;
+
+  return { year, quarter };
 }
 
 /**
@@ -186,15 +160,13 @@ export function targetEPSQuarter(now: Date = new Date()): {
   quarter: number;
 } {
   const y = now.getFullYear();
-  const m = now.getMonth() + 1; // 1-based
+  const m = now.getMonth() + 1;
   const d = now.getDate();
 
-  // 5/16 以後可抓 Q1
   if (m >= 9 || (m === 8 && d >= 15)) return { year: y, quarter: 2 };
   if (m >= 12 || (m === 11 && d >= 15)) return { year: y, quarter: 3 };
   if (m >= 6 || (m === 5 && d >= 16)) return { year: y, quarter: 1 };
   if (m >= 4 || (m === 3 && d >= 31)) return { year: y - 1, quarter: 4 };
 
-  // 1~3月中：還在等 Q4（去年的）
   return { year: y - 1, quarter: 3 };
 }
