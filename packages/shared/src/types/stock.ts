@@ -30,3 +30,25 @@ export interface StockSearchResult {
   close_price: number | null;
   change_val: number | null;
 }
+
+/* ---- Phase C: EPS & Valuation ---- */
+
+export interface QuarterlyEPS {
+  stock_code: string;
+  report_year: number;
+  report_quarter: number;
+  eps: number | null;
+  revenue: number | null;
+  operating_income: number | null;
+  pre_tax_income: number | null;
+  net_income: number | null;
+}
+
+export interface StockValuation {
+  stock_code: string;
+  current_price: number | null;
+  price_date: string | null;
+  trailing_eps: number | null;      // 近四季 EPS 合計
+  trailing_pe: number | null;       // 現價 / trailing_eps
+  eps_quarters: QuarterlyEPS[];     // 近 N 季歷史 EPS
+}

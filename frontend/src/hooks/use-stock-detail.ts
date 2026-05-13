@@ -67,3 +67,47 @@ export function useRevenue(code: string, months = 24) {
     enabled: !!code,
   });
 }
+
+/* ---- Phase C: EPS & Valuation ---- */
+
+export interface EPSRow {
+  report_year: number;
+  report_quarter: number;
+  eps: number | null;
+  revenue: number | null;
+  operating_income: number | null;
+  pre_tax_income: number | null;
+  net_income: number | null;
+}
+
+export interface ValuationData {
+  stock_code: string;
+  current_price: number | null;
+  price_date: string | null;
+  trailing_eps: number | null;
+  trailing_pe: number | null;
+  eps_quarters: EPSRow[];
+  institutional_net_5d: number | null;
+  etf_count: number;
+  etf_add_14d: number;
+  etf_remove_14d: number;
+}
+
+export function useQuarterlyEPS(code: string, quarters = 12) {
+  return useQuery({
+    queryKey: ["eps", code, quarters],
+    queryFn: () =>
+      apiFetch<EPSRow[]>(`/api/v1/stocks/${code}/eps?quarters=${quarters}`),
+    enabled: !!code,
+  });
+}
+
+export function useValuation(code: string) {
+  return useQuery({
+    queryKey: ["valuation", code],
+    queryFn: () =>
+      apiFetch<ValuationData>(`/api/v1/stocks/${code}/valuation`),
+    enabled: !!code,
+    staleTime: 5 * 60 * 1000,
+  });
+}

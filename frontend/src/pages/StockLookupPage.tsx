@@ -9,13 +9,16 @@ import { StockETFList } from "@/components/stock/StockETFList";
 import { InstitutionalTab } from "@/components/stock/InstitutionalTab";
 import { MarginTab } from "@/components/stock/MarginTab";
 import { RevenueTab } from "@/components/stock/RevenueTab";
+import { EPSTab } from "@/components/stock/EPSTab";
+import { ValuationCard } from "@/components/stock/ValuationCard";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { EmptyState } from "@/components/ui/EmptyState";
 
-type Tab = "chart" | "institutional" | "margin" | "revenue" | "etfs";
+type Tab = "chart" | "institutional" | "margin" | "revenue" | "eps" | "etfs";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "chart", label: "走勢圖" },
+  { key: "eps", label: "EPS / 估值" },
   { key: "institutional", label: "三大法人" },
   { key: "margin", label: "融資融券" },
   { key: "revenue", label: "月營收" },
@@ -76,6 +79,9 @@ export function StockLookupPage() {
         </button>
       </div>
 
+      {/* Valuation Summary Card */}
+      <ValuationCard code={stockCode} />
+
       {/* Tabs */}
       <div className="mb-4 flex gap-1 border-b border-border">
         {TABS.map((t) => (
@@ -112,6 +118,7 @@ export function StockLookupPage() {
             />
           ))}
 
+        {tab === "eps" && <EPSTab code={stockCode} />}
         {tab === "institutional" && <InstitutionalTab code={stockCode} />}
         {tab === "margin" && <MarginTab code={stockCode} />}
         {tab === "revenue" && <RevenueTab code={stockCode} />}

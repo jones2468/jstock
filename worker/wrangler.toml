@@ -17,4 +17,5 @@ crons = [
   "0 8 * * 1-5",    # 16:00 TST — compute holdings diffs + cleanup old data
   "30 8 * * 1-5",   # 16:30 TST — fetch institutional + margin (Phase B)
   "0 4 11 * *",     # 12:00 TST every 11th — fetch monthly revenue (Phase B)
+  "0 4 16 1,4,5,8,11 *",  # 12:00 TST on 16th of Jan/Apr/May/Aug/Nov — fetch quarterly EPS (Phase C)
 ]

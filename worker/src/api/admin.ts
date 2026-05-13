@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { HonoEnv } from "../env";
 import { runFetchInstitutionalMargin } from "../cron/fetch-institutional-margin";
 import { runFetchRevenue } from "../cron/fetch-revenue";
+import { runFetchEPS, runFetchEPSForQuarter } from "../cron/fetch-eps";
 import {
   runScrapeHoldings,
   runScrapeHoldingsBatch,
@@ -103,4 +104,26 @@ adminRoutes.post("/run/revenue/:year/:month", async (c) => {
   }
 
   return c.json({ ok: true, data: { year, month, rows: rows.length } });
+});
+
+// ---- EPS ----
+
+adminRoutes.post("/run/eps", async (c) => {
+  await runFetchEPS(c.env as unknown as Env);
+  return c.json({ ok: true });
+});
+
+// 補抓指定年度 + 季度的 EPS
+adminRoutes.post("/run/eps/:year/:quarter", async (c) => {
+  const year = parseInt(c.req.param("year"), 10);
+  const quarter = parseInt(c.req.param("quarter"), 10);
+  if (!year || !quarter || quarter < 1 || quarter > 4) {
+    return c.json({ ok: false, error: "invalid year/quarter" }, 400);
+  }
+  const result = await runFetchEPSForQuarter(
+    c.env as unknown as Env,
+    year,
+    quarter
+  );
+  return c.json({ ok: true, data: { year, quarter, rows: result.rows } });
 });

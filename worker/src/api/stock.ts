@@ -150,6 +150,127 @@ stockRoutes.get("/:code/revenue", async (c) => {
   return c.json({ ok: true, data: results });
 });
 
+// 季 EPS 歷史（最近 N 季，預設 12）
+stockRoutes.get("/:code/eps", async (c) => {
+  const code = c.req.param("code");
+  const quarters = Math.min(
+    parseInt(c.req.query("quarters") ?? "12", 10) || 12,
+    40
+  );
+  const db = c.env.DB;
+
+  const { results } = await db
+    .prepare(
+      `SELECT report_year, report_quarter, eps, revenue,
+              operating_income, pre_tax_income, net_income
+       FROM quarterly_eps
+       WHERE stock_code = ?
+       ORDER BY report_year DESC, report_quarter DESC
+       LIMIT ?`
+    )
+    .bind(code, quarters)
+    .all();
+
+  return c.json({ ok: true, data: results });
+});
+
+// 估值摘要：近四季 EPS + 本益比
+stockRoutes.get("/:code/valuation", async (c) => {
+  const code = c.req.param("code");
+  const db = c.env.DB;
+
+  // 最新收盤價
+  const price = await db
+    .prepare(
+      `SELECT close_price, price_date FROM stock_prices
+       WHERE stock_code = ? ORDER BY price_date DESC LIMIT 1`
+    )
+    .bind(code)
+    .first<{ close_price: number; price_date: string }>();
+
+  // 近 4 季 EPS
+  const { results: epsRows } = await db
+    .prepare(
+      `SELECT report_year, report_quarter, eps
+       FROM quarterly_eps
+       WHERE stock_code = ? AND eps IS NOT NULL
+       ORDER BY report_year DESC, report_quarter DESC
+       LIMIT 4`
+    )
+    .bind(code)
+    .all<{ report_year: number; report_quarter: number; eps: number }>();
+
+  const trailingEps =
+    epsRows.length === 4
+      ? Math.round(epsRows.reduce((sum, r) => sum + (r.eps ?? 0), 0) * 100) / 100
+      : null;
+
+  const trailingPe =
+    trailingEps && trailingEps > 0 && price
+      ? Math.round((price.close_price / trailingEps) * 100) / 100
+      : null;
+
+  // 近 12 季 EPS（給前端畫趨勢）
+  const { results: allEps } = await db
+    .prepare(
+      `SELECT report_year, report_quarter, eps, revenue,
+              operating_income, pre_tax_income, net_income
+       FROM quarterly_eps
+       WHERE stock_code = ?
+       ORDER BY report_year DESC, report_quarter DESC
+       LIMIT 12`
+    )
+    .bind(code)
+    .all();
+
+  // 近 5 日法人買賣超合計
+  const inst = await db
+    .prepare(
+      `SELECT SUM(total_net) as net5d
+       FROM (SELECT total_net FROM daily_institutional
+             WHERE stock_code = ?
+             ORDER BY trade_date DESC LIMIT 5)`
+    )
+    .bind(code)
+    .first<{ net5d: number | null }>();
+
+  // ETF 持倉數 + 近期變動
+  const etfSignal = await db
+    .prepare(
+      `SELECT
+         (SELECT COUNT(*) FROM holdings_snapshots
+          WHERE stock_code = ? AND snapshot_date = (SELECT MAX(snapshot_date) FROM holdings_snapshots WHERE stock_code = ?)) as etf_count,
+         (SELECT COUNT(*) FROM holdings_diffs
+          WHERE stock_code = ? AND diff_type = 'new'
+          AND diff_date >= date('now', '-14 days')) as etf_add_14d,
+         (SELECT COUNT(*) FROM holdings_diffs
+          WHERE stock_code = ? AND diff_type = 'removed'
+          AND diff_date >= date('now', '-14 days')) as etf_remove_14d`
+    )
+    .bind(code, code, code, code)
+    .first<{
+      etf_count: number;
+      etf_add_14d: number;
+      etf_remove_14d: number;
+    }>();
+
+  return c.json({
+    ok: true,
+    data: {
+      stock_code: code,
+      current_price: price?.close_price ?? null,
+      price_date: price?.price_date ?? null,
+      trailing_eps: trailingEps,
+      trailing_pe: trailingPe,
+      eps_quarters: allEps,
+      institutional_net_5d: inst?.net5d ?? null,
+      etf_count: etfSignal?.etf_count ?? 0,
+      etf_add_14d: etfSignal?.etf_add_14d ?? 0,
+      etf_remove_14d: etfSignal?.etf_remove_14d ?? 0,
+    },
+  });
+});
+
 stockRoutes.post("/batch-prices", async (c) => {
   const body = await c.req.json<{ stocks: string[]; date?: string }>();
   if (!body.stocks?.length) return c.json({ ok: true, data: [] });

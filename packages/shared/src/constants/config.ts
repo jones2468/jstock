@@ -22,4 +22,5 @@ export const CRON_JOBS = {
   FETCH_PRICES: "fetch_prices",
   COMPUTE_DIFFS: "compute_diffs",
   CLEANUP: "cleanup",
+  FETCH_EPS: "fetch_eps",
 } as const;
