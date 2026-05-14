@@ -41,7 +41,7 @@ async function d1Query(sql, params = []) {
 }
 
 async function d1InsertHoldings(date, etfCode, holdings) {
-  const CHUNK = 25;
+  const CHUNK = 10;
   for (let i = 0; i < holdings.length; i += CHUNK) {
     const batch = holdings.slice(i, i + CHUNK);
     const placeholders = batch.map(() => "(?,?,?,?,?,?)").join(",");
