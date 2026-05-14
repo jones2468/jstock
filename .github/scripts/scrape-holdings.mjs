@@ -40,18 +40,20 @@ async function d1Query(sql, params = []) {
   return json.result[0].results;
 }
 
-async function d1Batch(statements) {
-  const res = await fetch(D1_API, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${CF_API_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(statements.map((s) => ({ sql: s.sql, params: s.params }))),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`D1 batch ${res.status}: ${text}`);
+async function d1InsertHoldings(date, etfCode, holdings) {
+  const CHUNK = 25;
+  for (let i = 0; i < holdings.length; i += CHUNK) {
+    const batch = holdings.slice(i, i + CHUNK);
+    const placeholders = batch.map(() => "(?,?,?,?,?,?)").join(",");
+    const params = batch.flatMap((h) => [
+      date, etfCode, h.stock_code, h.stock_name, h.weight_pct, h.shares,
+    ]);
+    await d1Query(
+      `INSERT OR REPLACE INTO holdings_snapshots
+       (snapshot_date, etf_code, stock_code, stock_name, weight_pct, shares)
+       VALUES ${placeholders}`,
+      params
+    );
   }
 }
 
@@ -123,27 +125,16 @@ async function main() {
     );
 
     // 3. Write to D1 per successful ETF
-    for (const result of results) {
+    for (let ri = 0; ri < results.length; ri++) {
+      const result = results[ri];
       if (result.status === "fulfilled") {
         const { code, holdings } = result.value;
         if (holdings.length === 0) continue;
-
-        // Batch insert in groups of 50
-        for (let j = 0; j < holdings.length; j += 50) {
-          const batch = holdings.slice(j, j + 50);
-          const stmts = batch.map((h) => ({
-            sql: `INSERT OR REPLACE INTO holdings_snapshots
-                  (snapshot_date, etf_code, stock_code, stock_name, weight_pct, shares)
-                  VALUES (?, ?, ?, ?, ?, ?)`,
-            params: [today, code, h.stock_code, h.stock_name, h.weight_pct, h.shares],
-          }));
-          await d1Batch(stmts);
-        }
-
+        await d1InsertHoldings(today, code, holdings);
         totalRecords += holdings.length;
         etfCount++;
       } else {
-        const code = chunk[results.indexOf(result)]?.etf_code ?? "?";
+        const code = chunk[ri]?.etf_code ?? "?";
         errors.push(`${code}: ${result.reason?.message?.slice(0, 60)}`);
       }
     }
