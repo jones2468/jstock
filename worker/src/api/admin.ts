@@ -4,6 +4,7 @@ import { runFetchInstitutionalMargin } from "../cron/fetch-institutional-margin"
 import { runFetchRevenue } from "../cron/fetch-revenue";
 import { runFetchEPS, runFetchEPSForQuarter } from "../cron/fetch-eps";
 import { runFetchMarket } from "../cron/fetch-market";
+import { runFetchM1B } from "../cron/fetch-m1b";
 import { fetchMarketDaily } from "../data-sources/market";
 import {
   runScrapeHoldings,
@@ -194,6 +195,12 @@ adminRoutes.post("/m1b", async (c) => {
     .run();
 
   return c.json({ ok: true, data: { date: body.date, m1b: body.m1b, m1b_yoy_pct: yoy } });
+});
+
+// 手動觸發從 IMF 抓 M1B
+adminRoutes.post("/run/m1b", async (c) => {
+  const result = await runFetchM1B(c.env as unknown as Env);
+  return c.json({ ok: true, data: result });
 });
 
 // 補抓指定年度 + 季度的 EPS

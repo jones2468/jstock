@@ -1,30 +1,32 @@
 import type { Env } from "../env";
-import { fetchM1BData, type M1BRow } from "../data-sources/fred";
+import { fetchM1BFromIMF, type M1BRow } from "../data-sources/imf";
 import { logCronRun } from "./log";
 
-export async function runFetchM1B(env: Env): Promise<void> {
+export async function runFetchM1B(env: Env): Promise<{ rows: number }> {
   const db = env.DB;
   const today = new Date().toISOString().slice(0, 10);
   const startedAt = new Date().toISOString();
 
-  if (!env.FRED_API_KEY) {
-    console.log("[m1b] skipped: FRED_API_KEY not set");
-    return;
-  }
-
   try {
-    const start = new Date();
-    start.setFullYear(start.getFullYear() - 2);
-    const startDate = start.toISOString().slice(0, 10);
+    const startYear = new Date().getFullYear() - 2;
+    const rows = await fetchM1BFromIMF(startYear);
 
-    const rows = await fetchM1BData(env.FRED_API_KEY, startDate);
     if (rows.length === 0) {
-      console.log("[m1b] no data from FRED");
-      return;
+      console.log("[m1b] no data from IMF");
+      await logCronRun(db, {
+        jobName: "fetch_m1b",
+        runDate: today,
+        status: "partial",
+        etfCount: 0,
+        recordCount: 0,
+        errorMessage: "no data from IMF IFS",
+        startedAt,
+      });
+      return { rows: 0 };
     }
 
     await batchUpsertM1B(db, rows);
-    console.log(`[m1b] upserted ${rows.length} months`);
+    console.log(`[m1b] upserted ${rows.length} months from IMF`);
 
     await logCronRun(db, {
       jobName: "fetch_m1b",
@@ -35,6 +37,7 @@ export async function runFetchM1B(env: Env): Promise<void> {
       errorMessage: null,
       startedAt,
     });
+    return { rows: rows.length };
   } catch (e) {
     const msg = (e as Error).message;
     console.error(`[m1b] error: ${msg}`);
@@ -47,6 +50,7 @@ export async function runFetchM1B(env: Env): Promise<void> {
       errorMessage: msg,
       startedAt,
     });
+    return { rows: 0 };
   }
 }
 
