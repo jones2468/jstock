@@ -94,14 +94,18 @@ watchlistRoutes.post("/dashboard", async (c) => {
     .bind(...codes)
     .all<InstRow>();
 
-  // Query 4a: ETF holdings count (latest snapshot)
+  // Query 4a: ETF holdings count (each ETF's own latest snapshot)
   const { results: cntRows } = await db
     .prepare(
-      `SELECT stock_code, COUNT(*) AS etf_count
-       FROM holdings_snapshots
-       WHERE snapshot_date = (SELECT MAX(snapshot_date) FROM holdings_snapshots)
-         AND stock_code IN (${ph})
-       GROUP BY stock_code`
+      `SELECT h.stock_code, COUNT(DISTINCT h.etf_code) AS etf_count
+       FROM holdings_snapshots h
+       INNER JOIN (
+         SELECT etf_code, MAX(snapshot_date) AS max_date
+         FROM holdings_snapshots
+         GROUP BY etf_code
+       ) m ON h.etf_code = m.etf_code AND h.snapshot_date = m.max_date
+       WHERE h.stock_code IN (${ph})
+       GROUP BY h.stock_code`
     )
     .bind(...codes)
     .all<{ stock_code: string; etf_count: number }>();

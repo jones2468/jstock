@@ -11,6 +11,11 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+// Subrequest limit is ~50 per Worker invocation.
+// Each ETF costs ~3 subrequests (1 fetch + 1-2 D1 batch writes).
+// Scrape 15 ETFs per cron run; rotate offset via cron_runs metadata.
+const BATCH_SIZE = 15;
+
 export async function runScrapeHoldings(env: Env): Promise<void> {
   const db = env.DB;
   const today = getTwMarketDate();
@@ -27,12 +32,31 @@ export async function runScrapeHoldings(env: Env): Promise<void> {
     return;
   }
 
+  // Read last offset from metadata
+  const prev = await db
+    .prepare(
+      `SELECT error_message FROM cron_runs
+       WHERE job_name = ? ORDER BY started_at DESC LIMIT 1`
+    )
+    .bind(CRON_JOBS.SCRAPE_HOLDINGS)
+    .first<{ error_message: string | null }>();
+
+  let offset = 0;
+  if (prev?.error_message) {
+    const m = prev.error_message.match(/next_offset=(\d+)/);
+    if (m) offset = parseInt(m[1], 10);
+  }
+  if (offset >= allEtfs.length) offset = 0;
+
+  const batch = allEtfs.slice(offset, offset + BATCH_SIZE);
+  const nextOffset = offset + BATCH_SIZE >= allEtfs.length ? 0 : offset + BATCH_SIZE;
+
   let etfCount = 0;
   let totalRecords = 0;
   const errors: string[] = [];
 
-  for (let i = 0; i < allEtfs.length; i += CONCURRENCY) {
-    const chunk = allEtfs.slice(i, i + CONCURRENCY);
+  for (let i = 0; i < batch.length; i += CONCURRENCY) {
+    const chunk = batch.slice(i, i + CONCURRENCY);
     const results = await Promise.allSettled(
       chunk.map(async (etf) => {
         const holdings = await scrapeHoldings(etf.etf_code);
@@ -53,29 +77,28 @@ export async function runScrapeHoldings(env: Env): Promise<void> {
       }
     }
 
-    if (i + CONCURRENCY < allEtfs.length) {
+    if (i + CONCURRENCY < batch.length) {
       await sleep(DELAY_MS);
     }
   }
 
+  const meta = `offset=${offset},scraped=${etfCount}/${batch.length},next_offset=${nextOffset}`;
+
   await logCronRun(db, {
     jobName: CRON_JOBS.SCRAPE_HOLDINGS,
     runDate: today,
-    status:
-      errors.length === 0
-        ? "success"
-        : etfCount > 0
-          ? "partial"
-          : "failed",
+    status: errors.length === 0 ? "success" : etfCount > 0 ? "partial" : "failed",
     etfCount,
     recordCount: totalRecords,
     errorMessage:
-      errors.length > 0 ? errors.slice(0, 20).join("; ").slice(0, 500) : null,
+      errors.length > 0
+        ? `${meta}; ${errors.slice(0, 10).join("; ")}`.slice(0, 500)
+        : meta,
     startedAt,
   });
 
   console.log(
-    `[scrape] done: ${etfCount}/${allEtfs.length} ETFs, ${totalRecords} records, ${errors.length} errors`
+    `[scrape] batch ${offset}-${offset + batch.length}: ${etfCount}/${batch.length} ETFs, ${totalRecords} records, next=${nextOffset}`
   );
 }
 

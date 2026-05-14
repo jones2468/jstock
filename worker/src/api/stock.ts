@@ -35,34 +35,42 @@ stockRoutes.get("/:code/etfs", async (c) => {
   const code = c.req.param("code");
   const db = c.env.DB;
 
-  let date = c.req.query("date");
-  if (!date) {
-    const latest = await db
-      .prepare(
-        `SELECT MAX(snapshot_date) as d FROM holdings_snapshots WHERE stock_code = ?`
-      )
-      .bind(code)
-      .first<{ d: string | null }>();
-    date = latest?.d ?? new Date().toISOString().slice(0, 10);
-  }
+  const date = c.req.query("date");
 
-  const { results } = await db
-    .prepare(
-      `SELECT h.etf_code, e.etf_name, h.weight_pct, h.shares,
-              d.diff_type, d.weight_change
-       FROM holdings_snapshots h
-       JOIN etfs e ON e.etf_code = h.etf_code
-       LEFT JOIN holdings_diffs d
-         ON d.etf_code = h.etf_code
-         AND d.stock_code = h.stock_code
-         AND d.diff_date = h.snapshot_date
-       WHERE h.stock_code = ? AND h.snapshot_date = ?
-       ORDER BY h.weight_pct DESC`
-    )
-    .bind(code, date)
-    .all();
+  const { results } = date
+    ? await db
+        .prepare(
+          `SELECT h.etf_code, e.etf_name, h.weight_pct, h.shares,
+                  d.diff_type, d.weight_change
+           FROM holdings_snapshots h
+           JOIN etfs e ON e.etf_code = h.etf_code
+           LEFT JOIN holdings_diffs d
+             ON d.etf_code = h.etf_code AND d.stock_code = h.stock_code AND d.diff_date = h.snapshot_date
+           WHERE h.stock_code = ? AND h.snapshot_date = ?
+           ORDER BY h.weight_pct DESC`
+        )
+        .bind(code, date)
+        .all()
+    : await db
+        .prepare(
+          `SELECT h.etf_code, e.etf_name, h.weight_pct, h.shares,
+                  d.diff_type, d.weight_change
+           FROM holdings_snapshots h
+           INNER JOIN (
+             SELECT etf_code, MAX(snapshot_date) AS max_date
+             FROM holdings_snapshots
+             GROUP BY etf_code
+           ) m ON h.etf_code = m.etf_code AND h.snapshot_date = m.max_date
+           JOIN etfs e ON e.etf_code = h.etf_code
+           LEFT JOIN holdings_diffs d
+             ON d.etf_code = h.etf_code AND d.stock_code = h.stock_code AND d.diff_date = h.snapshot_date
+           WHERE h.stock_code = ?
+           ORDER BY h.weight_pct DESC`
+        )
+        .bind(code)
+        .all();
 
-  return c.json({ ok: true, data: results, snapshot_date: date });
+  return c.json({ ok: true, data: results });
 });
 
 // 加入 watchlist 時觸發：確保 stock_prices 已有最近 1 年資料；冪等
