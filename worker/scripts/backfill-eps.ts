@@ -73,7 +73,7 @@ function dateToQuarter(dateStr: string): { year: number; quarter: number } | nul
 }
 
 async function fetchEPS(code: string): Promise<EPSRow[]> {
-  const url = `${FINMIND_API}?dataset=TaiwanStockFinancialStatements&data_id=${code}&start_date=2023-01-01`;
+  const url = `${FINMIND_API}?dataset=TaiwanStockFinancialStatements&data_id=${code}&start_date=2021-01-01`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
