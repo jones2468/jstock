@@ -2,20 +2,29 @@ import { useEffect, useRef } from "react";
 import {
   createChart,
   type IChartApi,
+  type IPriceLine,
   type ISeriesApi,
   type LogicalRange,
   type Time,
   ColorType,
   CrosshairMode,
+  LineStyle,
 } from "lightweight-charts";
 import type { PriceRow, IndicatorRow } from "@/hooks/use-prices";
 
 interface Props {
   prices: PriceRow[];
   indicators: IndicatorRow[];
+  trailingEps?: number | null;
   onLoadMore?: () => void;
   isLoadingMore?: boolean;
 }
+
+const FAIR_PRICE_BANDS: { multiplier: number; color: string; title: string }[] = [
+  { multiplier: 15, color: "#10b981", title: "便宜 15x" },
+  { multiplier: 20, color: "#f59e0b", title: "合理 20x" },
+  { multiplier: 25, color: "#f43f5e", title: "偏貴 25x" },
+];
 
 const CHART_BG = "transparent";
 const TEXT_COLOR = "#94a3b8";
@@ -53,6 +62,7 @@ function chartOpts(
 export function SyncedStockChart({
   prices,
   indicators,
+  trailingEps,
   onLoadMore,
   isLoadingMore,
 }: Props) {
@@ -74,6 +84,7 @@ export function SyncedStockChart({
   const macdLineRef = useRef<ISeriesApi<"Line"> | null>(null);
   const signalLineRef = useRef<ISeriesApi<"Line"> | null>(null);
   const histRef = useRef<ISeriesApi<"Histogram"> | null>(null);
+  const fairPriceLinesRef = useRef<IPriceLine[]>([]);
 
   const isSyncing = useRef(false);
   const loadMoreCalled = useRef(false);
@@ -345,6 +356,35 @@ export function SyncedStockChart({
     loadMoreCalled.current = false;
   }, [prices, indicators]);
 
+  // Effect 3: fair-price horizontal lines (trailing EPS × 15/20/25)
+  useEffect(() => {
+    const candle = candleRef.current;
+    if (!candle) return;
+
+    // Clear previous lines
+    fairPriceLinesRef.current.forEach((line) => {
+      try {
+        candle.removePriceLine(line);
+      } catch {
+        // chart may already be disposed
+      }
+    });
+    fairPriceLinesRef.current = [];
+
+    if (trailingEps == null || trailingEps <= 0) return;
+
+    fairPriceLinesRef.current = FAIR_PRICE_BANDS.map(({ multiplier, color, title }) =>
+      candle.createPriceLine({
+        price: Number((trailingEps * multiplier).toFixed(2)),
+        color,
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title,
+      })
+    );
+  }, [trailingEps]);
+
   return (
     <div className="relative">
       {isLoadingMore && (
@@ -371,6 +411,23 @@ export function SyncedStockChart({
           />{" "}
           BB
         </span>
+        {trailingEps != null && trailingEps > 0 && (
+          <>
+            <span className="ml-2 text-slate-600">|</span>
+            <span className="text-slate-500">合理價(P/E×):</span>
+            {FAIR_PRICE_BANDS.map(({ multiplier, color }) => (
+              <span key={multiplier} className="flex items-center gap-1">
+                <span
+                  className="inline-block h-0.5 w-3"
+                  style={{ backgroundColor: color }}
+                />
+                <span className="tabular-nums">
+                  {multiplier}× {(trailingEps * multiplier).toFixed(0)}
+                </span>
+              </span>
+            ))}
+          </>
+        )}
       </div>
       <div ref={kRef} className="w-full" />
 

@@ -4,6 +4,7 @@ import { Star } from "lucide-react";
 import { useStockChartData } from "@/hooks/use-prices";
 import { useStockETFs } from "@/hooks/use-stock";
 import { useFavorites } from "@/hooks/use-favorites";
+import { useValuation } from "@/hooks/use-stock-detail";
 import { SyncedStockChart } from "@/components/chart/SyncedStockChart";
 import { StockETFList } from "@/components/stock/StockETFList";
 import { InstitutionalTab } from "@/components/stock/InstitutionalTab";
@@ -33,6 +34,7 @@ export function StockLookupPage() {
   const { prices, indicators, isLoading, isLoadingMore, loadMore } =
     useStockChartData(stockCode);
   const { data: etfs } = useStockETFs(stockCode);
+  const { data: valuation } = useValuation(stockCode);
   const { isFavorite, toggle } = useFavorites();
 
   const latestPrice = prices.length > 0 ? prices[prices.length - 1] : null;
@@ -113,6 +115,7 @@ export function StockLookupPage() {
             <SyncedStockChart
               prices={prices}
               indicators={indicators}
+              trailingEps={valuation?.trailing_eps ?? null}
               onLoadMore={loadMore}
               isLoadingMore={isLoadingMore}
             />
