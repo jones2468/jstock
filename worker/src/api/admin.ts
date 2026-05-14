@@ -3,6 +3,8 @@ import type { HonoEnv } from "../env";
 import { runFetchInstitutionalMargin } from "../cron/fetch-institutional-margin";
 import { runFetchRevenue } from "../cron/fetch-revenue";
 import { runFetchEPS, runFetchEPSForQuarter } from "../cron/fetch-eps";
+import { runFetchMarket } from "../cron/fetch-market";
+import { fetchMarketDaily } from "../data-sources/market";
 import {
   runScrapeHoldings,
   runScrapeHoldingsBatch,
@@ -111,6 +113,43 @@ adminRoutes.post("/run/revenue/:year/:month", async (c) => {
 adminRoutes.post("/run/eps", async (c) => {
   await runFetchEPS(c.env as unknown as Env);
   return c.json({ ok: true });
+});
+
+// ---- Market daily ----
+
+adminRoutes.post("/run/market", async (c) => {
+  await runFetchMarket(c.env as unknown as Env);
+  return c.json({ ok: true });
+});
+
+// 一次性 backfill：指定起始日，跑到今天
+adminRoutes.post("/run/market-backfill", async (c) => {
+  const start = c.req.query("start");
+  if (!start || !/^\d{4}-\d{2}-\d{2}$/.test(start)) {
+    return c.json({ ok: false, error: "需傳入 ?start=YYYY-MM-DD" }, 400);
+  }
+  const rows = await fetchMarketDaily(start);
+  if (rows.length === 0) {
+    return c.json({ ok: true, data: { rows: 0 } });
+  }
+  const stmts = rows.map((r) =>
+    c.env.DB.prepare(
+      `INSERT OR REPLACE INTO market_daily
+         (trade_date, taiex_close, taiex_change, taiex_change_pct,
+          total_volume_value, total_margin_balance, total_short_balance)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      r.trade_date,
+      r.taiex_close,
+      r.taiex_change,
+      r.taiex_change_pct,
+      r.total_volume_value,
+      r.total_margin_balance,
+      r.total_short_balance
+    )
+  );
+  await c.env.DB.batch(stmts);
+  return c.json({ ok: true, data: { rows: rows.length, start } });
 });
 
 // 補抓指定年度 + 季度的 EPS

@@ -4,6 +4,7 @@ import { runFetchPrices } from "./fetch-prices";
 import { runFetchInstitutionalMargin } from "./fetch-institutional-margin";
 import { runFetchRevenue } from "./fetch-revenue";
 import { runFetchEPS } from "./fetch-eps";
+import { runFetchMarket } from "./fetch-market";
 import { DATA_RETENTION_DAYS } from "@jstock/shared";
 
 export async function handleCron(cron: string, env: Env): Promise<void> {
@@ -21,6 +22,7 @@ export async function handleCron(cron: string, env: Env): Promise<void> {
 
     case "30 8 * * 1-5":
       await runFetchInstitutionalMargin(env);
+      await runFetchMarket(env);
       break;
 
     case "0 4 11 * *":

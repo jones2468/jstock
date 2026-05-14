@@ -12,6 +12,7 @@ import { metaRoutes } from "./api/meta";
 import { searchRoutes } from "./api/search";
 import { adminRoutes } from "./api/admin";
 import { watchlistRoutes } from "./api/watchlist";
+import { marketRoutes } from "./api/market";
 
 const app = new Hono<HonoEnv>();
 
@@ -29,6 +30,7 @@ api.route("/meta", metaRoutes);
 api.route("/search", searchRoutes);
 api.route("/admin", adminRoutes);
 api.route("/watchlist", watchlistRoutes);
+api.route("/market", marketRoutes);
 
 app.get("/", (c) => c.json({ name: "jstock-worker", status: "ok" }));
 
