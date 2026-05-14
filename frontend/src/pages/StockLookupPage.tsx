@@ -6,6 +6,7 @@ import { useStockETFs } from "@/hooks/use-stock";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useValuation } from "@/hooks/use-stock-detail";
 import { SyncedStockChart } from "@/components/chart/SyncedStockChart";
+import { PERiverChart } from "@/components/chart/PERiverChart";
 import { StockETFList } from "@/components/stock/StockETFList";
 import { InstitutionalTab } from "@/components/stock/InstitutionalTab";
 import { MarginTab } from "@/components/stock/MarginTab";
@@ -15,10 +16,18 @@ import { ValuationCard } from "@/components/stock/ValuationCard";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { EmptyState } from "@/components/ui/EmptyState";
 
-type Tab = "chart" | "institutional" | "margin" | "revenue" | "eps" | "etfs";
+type Tab =
+  | "chart"
+  | "river"
+  | "institutional"
+  | "margin"
+  | "revenue"
+  | "eps"
+  | "etfs";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "chart", label: "走勢圖" },
+  { key: "river", label: "估值河流" },
   { key: "eps", label: "EPS / 估值" },
   { key: "institutional", label: "三大法人" },
   { key: "margin", label: "融資融券" },
@@ -121,6 +130,7 @@ export function StockLookupPage() {
             />
           ))}
 
+        {tab === "river" && <PERiverChart code={stockCode} />}
         {tab === "eps" && <EPSTab code={stockCode} />}
         {tab === "institutional" && <InstitutionalTab code={stockCode} />}
         {tab === "margin" && <MarginTab code={stockCode} />}
