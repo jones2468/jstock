@@ -1,5 +1,5 @@
 import type { Env } from "../env";
-import { fetchM1BFromIMF, type M1BRow } from "../data-sources/imf";
+import { fetchM1BFromCBC, type M1BRow } from "../data-sources/cbc";
 import { logCronRun } from "./log";
 
 export async function runFetchM1B(env: Env): Promise<{ rows: number }> {
@@ -9,24 +9,24 @@ export async function runFetchM1B(env: Env): Promise<{ rows: number }> {
 
   try {
     const startYear = new Date().getFullYear() - 2;
-    const rows = await fetchM1BFromIMF(startYear);
+    const rows = await fetchM1BFromCBC(startYear);
 
     if (rows.length === 0) {
-      console.log("[m1b] no data from IMF");
+      console.log("[m1b] no data from CBC");
       await logCronRun(db, {
         jobName: "fetch_m1b",
         runDate: today,
         status: "partial",
         etfCount: 0,
         recordCount: 0,
-        errorMessage: "no data from IMF IFS",
+        errorMessage: "no data from CBC open data",
         startedAt,
       });
       return { rows: 0 };
     }
 
     await batchUpsertM1B(db, rows);
-    console.log(`[m1b] upserted ${rows.length} months from IMF`);
+    console.log(`[m1b] upserted ${rows.length} months from CBC`);
 
     await logCronRun(db, {
       jobName: "fetch_m1b",
