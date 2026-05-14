@@ -116,6 +116,13 @@ export function MarketTempPage() {
         </div>
       </div>
 
+      {/* M1B */}
+      {data.m1b && (
+        <div className="mb-6">
+          <M1BCard m1b={data.m1b} />
+        </div>
+      )}
+
       {/* History chart */}
       <div className="rounded-lg border border-border bg-surface-secondary p-4">
         <h2 className="mb-3 text-sm font-semibold text-slate-300">
@@ -207,6 +214,50 @@ function interpretRSI(value: number | null, t: Tone): string {
   if (t === "red") return "超買，留意修正";
   if (value < 30) return "超賣，留意反彈";
   return "正常區間";
+}
+
+function M1BCard({ m1b }: { m1b: NonNullable<MarketTemperatureData["m1b"]> }) {
+  const yoyTone: Tone =
+    m1b.m1b_yoy_pct == null
+      ? "gray"
+      : m1b.m1b_yoy_pct > 10
+        ? "red"
+        : m1b.m1b_yoy_pct < 3
+          ? "blue"
+          : "green";
+
+  const interpret =
+    m1b.m1b_yoy_pct == null
+      ? "—"
+      : m1b.m1b_yoy_pct > 10
+        ? "資金寬鬆，留意過熱"
+        : m1b.m1b_yoy_pct < 3
+          ? "資金緊縮，市場保守"
+          : "資金正常";
+
+  const fmtBillion = (v: number | null) =>
+    v == null ? "—" : `${(v / 1000).toFixed(0)} 兆`;
+
+  return (
+    <div className={`rounded-lg border p-3 ${TONE_BG[yoyTone]}`}>
+      <div className="flex items-baseline justify-between">
+        <div>
+          <div className="text-xs text-slate-400">M1B 年增率（月頻）</div>
+          <div className="mt-0.5 text-[10px] text-slate-500">
+            {m1b.report_date.slice(0, 7)} 央行公佈
+          </div>
+        </div>
+        <div className={`text-2xl font-bold tabular-nums ${TONE_TEXT[yoyTone]}`}>
+          {m1b.m1b_yoy_pct != null ? `${m1b.m1b_yoy_pct.toFixed(2)}%` : "—"}
+        </div>
+      </div>
+      <div className="mt-2 flex gap-4 text-xs text-slate-400 tabular-nums">
+        <span>M1B {fmtBillion(m1b.m1b)}</span>
+        <span>M2 {fmtBillion(m1b.m2)}</span>
+      </div>
+      <div className={`mt-2 text-xs ${TONE_TEXT[yoyTone]}`}>{interpret}</div>
+    </div>
+  );
 }
 
 function TaiexChart({ history }: { history: MarketTemperatureData["history"] }) {

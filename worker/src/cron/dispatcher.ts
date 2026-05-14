@@ -5,6 +5,7 @@ import { runFetchInstitutionalMargin } from "./fetch-institutional-margin";
 import { runFetchRevenue } from "./fetch-revenue";
 import { runFetchEPS } from "./fetch-eps";
 import { runFetchMarket } from "./fetch-market";
+import { runFetchM1B } from "./fetch-m1b";
 import { DATA_RETENTION_DAYS } from "@jstock/shared";
 
 export async function handleCron(cron: string, env: Env): Promise<void> {
@@ -27,8 +28,8 @@ export async function handleCron(cron: string, env: Env): Promise<void> {
 
     case "0 4 11 * *":
       await runFetchRevenue(env);
-      // 季 EPS 搭月營收一起跑（每月檢查，季報公告月才有新資料）
       await runFetchEPS(env);
+      await runFetchM1B(env);
       break;
 
     default:

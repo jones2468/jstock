@@ -38,7 +38,8 @@ export function MarginTab({ code }: { code: string }) {
             <th className="px-2 py-2 text-right">融資增減</th>
             <th className="px-2 py-2 text-right border-l border-border">融券餘額</th>
             <th className="px-2 py-2 text-right">融券增減</th>
-            <th className="px-2 py-2 text-right border-l border-border">資券比</th>
+            <th className="px-2 py-2 text-right border-l border-border">融資使用率</th>
+            <th className="px-2 py-2 text-right">資券比</th>
           </tr>
         </thead>
         <tbody>
@@ -47,6 +48,18 @@ export function MarginTab({ code }: { code: string }) {
               r.margin_balance && r.margin_balance > 0 && r.short_balance != null
                 ? ((r.short_balance / r.margin_balance) * 100).toFixed(2)
                 : null;
+            const utilization =
+              r.margin_balance != null && r.margin_limit && r.margin_limit > 0
+                ? ((r.margin_balance / r.margin_limit) * 100).toFixed(1)
+                : null;
+            const utilCls =
+              utilization != null
+                ? parseFloat(utilization) > 80
+                  ? "text-rose-400"
+                  : parseFloat(utilization) > 60
+                    ? "text-amber-400"
+                    : "text-slate-300"
+                : "";
             return (
               <tr key={r.trade_date} className="border-b border-border/40">
                 <td className="px-2 py-1.5 text-left text-slate-400">
@@ -70,7 +83,10 @@ export function MarginTab({ code }: { code: string }) {
                     : (r.short_delta >= 0 ? "+" : "") +
                       r.short_delta.toLocaleString()}
                 </td>
-                <td className="px-2 py-1.5 text-right border-l border-border text-slate-300">
+                <td className={`px-2 py-1.5 text-right border-l border-border ${utilCls}`}>
+                  {utilization ? `${utilization}%` : "-"}
+                </td>
+                <td className="px-2 py-1.5 text-right text-slate-300">
                   {ratio ? `${ratio}%` : "-"}
                 </td>
               </tr>
@@ -79,7 +95,7 @@ export function MarginTab({ code }: { code: string }) {
         </tbody>
       </table>
       <div className="mt-2 text-xs text-slate-500">
-        單位：張。資券比 = 融券餘額 / 融資餘額（高於 30% 通常代表軋空可能）。
+        單位：張。融資使用率 = 餘額 / 限額（高於 80% 代表融資額度吃緊）。資券比 = 融券餘額 / 融資餘額（高於 30% 通常代表軋空可能）。
       </div>
     </div>
   );

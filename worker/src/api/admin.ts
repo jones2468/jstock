@@ -152,6 +152,50 @@ adminRoutes.post("/run/market-backfill", async (c) => {
   return c.json({ ok: true, data: { rows: rows.length, start } });
 });
 
+// ---- M1B ----
+
+// 手動新增/更新 M1B 月資料
+// curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+//   -d '{"date":"2026-04-01","m1b":28500000,"m2":62000000}' \
+//   https://jstock-worker.../api/v1/admin/m1b
+adminRoutes.post("/m1b", async (c) => {
+  const body = await c.req.json<{
+    date: string;      // YYYY-MM-01
+    m1b: number;       // 百萬元 NTD
+    m2?: number | null; // 百萬元 NTD（選填）
+    m1b_yoy_pct?: number | null;
+  }>();
+
+  if (!body.date || !/^\d{4}-\d{2}-\d{2}$/.test(body.date) || body.m1b == null) {
+    return c.json({ ok: false, error: "需傳 date (YYYY-MM-01) + m1b (百萬元)" }, 400);
+  }
+
+  const db = c.env.DB;
+
+  let yoy = body.m1b_yoy_pct ?? null;
+  if (yoy == null) {
+    const ym = body.date.slice(0, 7);
+    const lastYearDate = `${parseInt(ym.slice(0, 4)) - 1}${ym.slice(4)}-01`;
+    const prev = await db
+      .prepare(`SELECT m1b FROM monthly_m1b WHERE report_date = ?`)
+      .bind(lastYearDate)
+      .first<{ m1b: number | null }>();
+    if (prev?.m1b && prev.m1b > 0) {
+      yoy = Math.round(((body.m1b - prev.m1b) / prev.m1b) * 10000) / 100;
+    }
+  }
+
+  await db
+    .prepare(
+      `INSERT OR REPLACE INTO monthly_m1b (report_date, m1b, m2, m1b_yoy_pct)
+       VALUES (?, ?, ?, ?)`
+    )
+    .bind(body.date, body.m1b, body.m2 ?? null, yoy)
+    .run();
+
+  return c.json({ ok: true, data: { date: body.date, m1b: body.m1b, m1b_yoy_pct: yoy } });
+});
+
 // 補抓指定年度 + 季度的 EPS
 adminRoutes.post("/run/eps/:year/:quarter", async (c) => {
   const year = parseInt(c.req.param("year"), 10);

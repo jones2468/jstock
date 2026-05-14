@@ -11,12 +11,11 @@ import { apiPost } from "@/lib/api";
 
 export type { WatchItem, WatchType } from "@/lib/favorites";
 
-// fire-and-forget：加入 watchlist 後背景補 1 年股價，user 不用等
+// fire-and-forget：加入 watchlist 後背景補股價 + EPS，user 不用等
 function triggerBackfill(type: WatchType, code: string) {
   if (type !== "stock") return;
-  apiPost(`/api/v1/stocks/${code}/backfill`, {}).catch(() => {
-    /* 背景任務，失敗時下次點進去看圖會再 trigger */
-  });
+  apiPost(`/api/v1/stocks/${code}/backfill`, {}).catch(() => {});
+  apiPost(`/api/v1/stocks/${code}/backfill-eps`, {}).catch(() => {});
 }
 
 export function useFavorites() {

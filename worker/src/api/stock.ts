@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { HonoEnv } from "../env";
 import { ensureHistoricalData } from "../utils/backfill";
+import { fetchStockEPS } from "../data-sources/mops-eps";
 
 export const stockRoutes = new Hono<HonoEnv>();
 
@@ -81,6 +82,49 @@ stockRoutes.post("/:code/backfill", async (c) => {
     ok: true,
     data: { earliest: earliest?.d, rows: earliest?.n ?? 0 },
   });
+});
+
+// 加入 watchlist 時觸發：補歷史 EPS；冪等
+stockRoutes.post("/:code/backfill-eps", async (c) => {
+  const code = c.req.param("code");
+  const db = c.env.DB;
+
+  const existing = await db
+    .prepare(`SELECT COUNT(*) as n FROM quarterly_eps WHERE stock_code = ?`)
+    .bind(code)
+    .first<{ n: number }>();
+
+  if (existing && existing.n >= 8) {
+    return c.json({ ok: true, data: { rows: existing.n, skipped: true } });
+  }
+
+  try {
+    const rows = await fetchStockEPS(code, "2021-01-01");
+    if (rows.length > 0) {
+      const BATCH = 50;
+      for (let i = 0; i < rows.length; i += BATCH) {
+        const batch = rows.slice(i, i + BATCH);
+        const stmts = batch.map((r) =>
+          db
+            .prepare(
+              `INSERT OR REPLACE INTO quarterly_eps
+               (stock_code, report_year, report_quarter, eps, revenue,
+                operating_income, pre_tax_income, net_income)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+            )
+            .bind(
+              r.stock_code, r.report_year, r.report_quarter,
+              r.eps, r.revenue, r.operating_income,
+              r.pre_tax_income, r.net_income
+            )
+        );
+        await db.batch(stmts);
+      }
+    }
+    return c.json({ ok: true, data: { rows: rows.length, skipped: false } });
+  } catch (e) {
+    return c.json({ ok: true, data: { rows: 0, error: (e as Error).message } });
+  }
 });
 
 // 三大法人買賣超（最近 N 日）

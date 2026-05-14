@@ -103,6 +103,23 @@ function aggregateScore(volume: Tone, margin: Tone, rsi: Tone): {
   return { score, label, tone };
 }
 
+marketRoutes.get("/m1b", async (c) => {
+  const db = c.env.DB;
+  const months = Math.min(parseInt(c.req.query("months") ?? "36", 10) || 36, 120);
+
+  const { results } = await db
+    .prepare(
+      `SELECT report_date, m1b, m2, m1b_yoy_pct
+       FROM monthly_m1b
+       ORDER BY report_date DESC
+       LIMIT ?`
+    )
+    .bind(months)
+    .all<{ report_date: string; m1b: number | null; m2: number | null; m1b_yoy_pct: number | null }>();
+
+  return c.json({ ok: true, data: results });
+});
+
 marketRoutes.get("/temperature", async (c) => {
   const db = c.env.DB;
 
@@ -171,6 +188,17 @@ marketRoutes.get("/temperature", async (c) => {
       temperature: aggregate,
       // 倒序送回前端（前端要畫圖再反）
       history: results,
+      m1b: await getLatestM1B(db),
     },
   });
 });
+
+async function getLatestM1B(db: D1Database) {
+  const row = await db
+    .prepare(
+      `SELECT report_date, m1b, m2, m1b_yoy_pct
+       FROM monthly_m1b ORDER BY report_date DESC LIMIT 1`
+    )
+    .first<{ report_date: string; m1b: number | null; m2: number | null; m1b_yoy_pct: number | null }>();
+  return row ?? null;
+}

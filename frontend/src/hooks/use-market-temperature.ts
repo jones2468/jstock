@@ -33,6 +33,12 @@ export interface MarketTemperatureData {
   rsi: { value: number | null; signal: Tone };
   temperature: { score: number; label: string; tone: Tone };
   history: MarketHistoryRow[];
+  m1b: {
+    report_date: string;
+    m1b: number | null;
+    m2: number | null;
+    m1b_yoy_pct: number | null;
+  } | null;
 }
 
 export function useMarketTemperature() {
