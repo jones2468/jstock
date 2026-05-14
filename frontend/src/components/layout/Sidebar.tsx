@@ -1,18 +1,9 @@
 import { NavLink } from "react-router-dom";
-import {
-  LayoutDashboard,
-  List,
-  Radar,
-  GitCompareArrows,
-  Search,
-  Star,
-} from "lucide-react";
+import { LayoutDashboard, List, Star } from "lucide-react";
 
 const links = [
-  { to: "/", label: "ETF 總覽", icon: LayoutDashboard },
-  { to: "/radar", label: "異動雷達", icon: Radar },
-  { to: "/overlap", label: "重疊分析", icon: GitCompareArrows },
-  { to: "/watchlist", label: "自選股", icon: Star },
+  { to: "/", label: "觀察清單", icon: Star },
+  { to: "/etf-dashboard", label: "ETF 總覽", icon: LayoutDashboard },
 ];
 
 export function Sidebar() {
