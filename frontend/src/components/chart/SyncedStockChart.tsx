@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createChart,
   type IChartApi,
@@ -25,6 +25,64 @@ const FAIR_PRICE_BANDS: { multiplier: number; color: string; title: string }[] =
   { multiplier: 20, color: "#f59e0b", title: "合理 20x" },
   { multiplier: 25, color: "#f43f5e", title: "偏貴 25x" },
 ];
+
+const FIB_LOOKBACK_DAYS = 180;
+const FIB_LEVELS: { ratio: number; title: string; bold: boolean }[] = [
+  { ratio: 0, title: "0%", bold: true },
+  { ratio: 0.382, title: "38.2%", bold: false },
+  { ratio: 0.5, title: "50%", bold: false },
+  { ratio: 0.618, title: "61.8%", bold: false },
+  { ratio: 1, title: "100%", bold: true },
+];
+const FIB_COLOR = "#06b6d4";
+
+interface SwingRange {
+  high: number;
+  low: number;
+  highDate: string;
+  lowDate: string;
+  uptrend: boolean;
+}
+
+function computeSwingRange(prices: PriceRow[]): SwingRange | null {
+  if (prices.length === 0) return null;
+  const lastDate = prices[prices.length - 1].price_date;
+  const cutoff = new Date(lastDate);
+  cutoff.setDate(cutoff.getDate() - FIB_LOOKBACK_DAYS);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+
+  let high = -Infinity;
+  let low = Infinity;
+  let highDate = "";
+  let lowDate = "";
+  for (const p of prices) {
+    if (p.price_date < cutoffStr) continue;
+    const hi = p.high_price ?? p.close_price;
+    const lo = p.low_price ?? p.close_price;
+    if (hi > high) {
+      high = hi;
+      highDate = p.price_date;
+    }
+    if (lo < low) {
+      low = lo;
+      lowDate = p.price_date;
+    }
+  }
+  if (!Number.isFinite(high) || !Number.isFinite(low) || high === low) return null;
+  return { high, low, highDate, lowDate, uptrend: highDate > lowDate };
+}
+
+function fibPrice(range: SwingRange, ratio: number): number {
+  // ratio=0 anchors at the most recent extreme of the swing;
+  // ratio=1 anchors at the earlier extreme. retracement goes between them.
+  if (range.uptrend) {
+    // High is recent — retracement pulls down from high toward low.
+    return range.high - (range.high - range.low) * ratio;
+  } else {
+    // Low is recent — bounce levels go up from low toward high.
+    return range.low + (range.high - range.low) * ratio;
+  }
+}
 
 const CHART_BG = "transparent";
 const TEXT_COLOR = "#94a3b8";
@@ -85,6 +143,8 @@ export function SyncedStockChart({
   const signalLineRef = useRef<ISeriesApi<"Line"> | null>(null);
   const histRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const fairPriceLinesRef = useRef<IPriceLine[]>([]);
+  const fibLinesRef = useRef<IPriceLine[]>([]);
+  const [showFib, setShowFib] = useState(false);
 
   const isSyncing = useRef(false);
   const loadMoreCalled = useRef(false);
@@ -385,6 +445,37 @@ export function SyncedStockChart({
     );
   }, [trailingEps]);
 
+  // Compute swing range for Fibonacci (memoized for legend display)
+  const swing = useMemo(() => computeSwingRange(prices), [prices]);
+
+  // Effect 4: Fibonacci retracement lines
+  useEffect(() => {
+    const candle = candleRef.current;
+    if (!candle) return;
+
+    fibLinesRef.current.forEach((line) => {
+      try {
+        candle.removePriceLine(line);
+      } catch {
+        // chart may already be disposed
+      }
+    });
+    fibLinesRef.current = [];
+
+    if (!showFib || !swing) return;
+
+    fibLinesRef.current = FIB_LEVELS.map(({ ratio, title, bold }) =>
+      candle.createPriceLine({
+        price: Number(fibPrice(swing, ratio).toFixed(2)),
+        color: FIB_COLOR,
+        lineWidth: bold ? 2 : 1,
+        lineStyle: bold ? LineStyle.Solid : LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: `Fib ${title}`,
+      })
+    );
+  }, [showFib, swing]);
+
   return (
     <div className="relative">
       {isLoadingMore && (
@@ -426,6 +517,28 @@ export function SyncedStockChart({
                 </span>
               </span>
             ))}
+          </>
+        )}
+        {swing && (
+          <>
+            <span className="ml-2 text-slate-600">|</span>
+            <button
+              type="button"
+              onClick={() => setShowFib((v) => !v)}
+              className={`rounded px-1.5 py-0.5 text-xs transition-colors ${
+                showFib
+                  ? "bg-cyan-500/15 text-cyan-300"
+                  : "bg-slate-800 text-slate-400 hover:text-slate-200"
+              }`}
+              title={`近 ${FIB_LOOKBACK_DAYS} 天高 ${swing.high.toFixed(2)} (${swing.highDate}) / 低 ${swing.low.toFixed(2)} (${swing.lowDate})`}
+            >
+              {showFib ? "● " : "○ "}黃金切割
+            </button>
+            {showFib && (
+              <span className="text-slate-500">
+                {swing.uptrend ? "↗ 高→低回撤" : "↘ 低→高反彈"}
+              </span>
+            )}
           </>
         )}
       </div>
