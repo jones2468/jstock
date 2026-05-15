@@ -1,10 +1,17 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, List, Star, Thermometer } from "lucide-react";
+import {
+  BookOpen,
+  LayoutDashboard,
+  List,
+  Star,
+  Thermometer,
+} from "lucide-react";
 
 const links = [
   { to: "/", label: "觀察清單", icon: Star },
   { to: "/market", label: "大盤溫度", icon: Thermometer },
   { to: "/etf-dashboard", label: "ETF 總覽", icon: LayoutDashboard },
+  { to: "/guide", label: "使用說明", icon: BookOpen },
 ];
 
 export function Sidebar() {
