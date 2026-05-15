@@ -1,16 +1,9 @@
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { ChevronLeft, RotateCcw, Star } from "lucide-react";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-import * as RGL from "react-grid-layout";
+import { Responsive, WidthProvider } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
-
-// react-grid-layout 的 @types 沒正確 export Layouts / WidthProvider
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ResponsiveGrid: any = (RGL as any).Responsive;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const WidthProvider: any = (RGL as any).WidthProvider;
 
 interface LayoutItem {
   i: string;
@@ -39,7 +32,7 @@ import { StockSettings } from "@/components/stock/StockSettings";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { EmptyState } from "@/components/ui/EmptyState";
 
-const ResponsiveGridLayout = WidthProvider(ResponsiveGrid);
+const ResponsiveGridLayout = WidthProvider(Responsive);
 
 const LAYOUT_STORAGE_KEY = "jstock_stock_dashboard_layout";
 
