@@ -26,3 +26,71 @@ body {
 .dark body {
   color: #e2e8f0;
 }
+
+/* 暗色 scrollbar，跟背景融合 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #334155 transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: #334155;
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: #475569;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* react-grid-layout：dark theme 微調 */
+.react-grid-item.react-grid-placeholder {
+  background: rgba(59, 130, 246, 0.15) !important;
+  border: 1px dashed rgba(59, 130, 246, 0.5) !important;
+  border-radius: 0.5rem;
+  opacity: 1 !important;
+}
+
+.react-grid-item > .react-resizable-handle {
+  background-image: none;
+  width: 18px;
+  height: 18px;
+  bottom: 2px;
+  right: 2px;
+  opacity: 0.3;
+  transition: opacity 0.15s;
+}
+
+.react-grid-item:hover > .react-resizable-handle {
+  opacity: 0.7;
+}
+
+.react-grid-item > .react-resizable-handle::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid #64748b;
+  border-bottom: 2px solid #64748b;
+}
+
+.react-grid-item.react-draggable-dragging {
+  z-index: 30;
+  opacity: 0.85;
+}

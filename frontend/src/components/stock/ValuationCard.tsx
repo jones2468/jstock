@@ -1,6 +1,5 @@
 import { useValuation } from "@/hooks/use-stock-detail";
 import { usePELevels } from "@/hooks/use-pe-levels";
-import { PELevelsEditor } from "./PELevelsEditor";
 import {
   TrendingUp,
   TrendingDown,
@@ -74,8 +73,7 @@ export function ValuationCard({ code }: { code: string }) {
         : { label: "無異動", color: "text-slate-500" };
 
   return (
-    <div className="mb-4 rounded-lg border border-border bg-surface-secondary p-4">
-      <PELevelsEditor code={code} />
+    <div className="rounded-lg border border-border bg-surface-secondary p-4">
       <div className="mb-2 flex items-center gap-2 text-xs text-slate-500">
         <BarChart3 className="h-3.5 w-3.5" />
         <span>研判總覽</span>
