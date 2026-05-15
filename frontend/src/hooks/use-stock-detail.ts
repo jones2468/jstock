@@ -82,7 +82,9 @@ export interface EPSRow {
 
 export interface ValuationData {
   stock_code: string;
+  stock_name: string | null;
   current_price: number | null;
+  change_val: number | null;
   price_date: string | null;
   trailing_eps: number | null;
   trailing_pe: number | null;

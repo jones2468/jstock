@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
-import { Star } from "lucide-react";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { ChevronLeft, Star } from "lucide-react";
 import { useStockChartData } from "@/hooks/use-prices";
 import { useStockETFs } from "@/hooks/use-stock";
 import { useFavorites } from "@/hooks/use-favorites";
@@ -37,6 +37,7 @@ const TABS: { key: Tab; label: string }[] = [
 
 export function StockLookupPage() {
   const { code } = useParams<{ code: string }>();
+  const navigate = useNavigate();
   const stockCode = code ?? "";
   const [tab, setTab] = useState<Tab>("chart");
 
@@ -47,31 +48,61 @@ export function StockLookupPage() {
   const { isFavorite, toggle } = useFavorites();
 
   const latestPrice = prices.length > 0 ? prices[prices.length - 1] : null;
+  const stockName = valuation?.stock_name ?? null;
+  // 優先用最新走勢圖資料，沒有就用 valuation 的 latest
+  const displayPrice = latestPrice?.close_price ?? valuation?.current_price ?? null;
+  const displayChange = latestPrice?.change_val ?? valuation?.change_val ?? null;
 
   return (
     <div>
-      {/* Header */}
+      {/* 麵包屑 / 返回 */}
+      <nav className="mb-3 flex items-center gap-1 text-xs text-slate-500">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-0.5 rounded px-1 py-0.5 hover:bg-surface-secondary hover:text-slate-300"
+          title="返回上一頁"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+          返回
+        </button>
+        <span className="mx-1 text-slate-700">/</span>
+        <Link to="/" className="hover:text-slate-300">
+          觀察清單
+        </Link>
+        <span className="mx-1 text-slate-700">/</span>
+        <span className="text-slate-400">
+          {stockName ? `${stockName} ${stockCode}` : stockCode}
+        </span>
+      </nav>
+
+      {/* Header：鴻海 2317 | 251 +1.00 */}
       <div className="mb-6 flex items-start justify-between">
-        <div>
-          <h1 className="text-xl font-bold">{stockCode}</h1>
-          {latestPrice && (
-            <div className="mt-1 flex items-center gap-3">
-              <span className="text-2xl font-bold tabular-nums">
-                {latestPrice.close_price.toLocaleString()}
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h1 className="text-xl font-bold">
+            {stockName ?? stockCode}
+            {stockName && (
+              <span className="ml-2 text-base font-normal text-slate-400">
+                {stockCode}
               </span>
-              {latestPrice.change_val != null && (
+            )}
+          </h1>
+          {displayPrice != null && (
+            <>
+              <span className="text-slate-600">|</span>
+              <span className="text-2xl font-bold tabular-nums">
+                {displayPrice.toLocaleString()}
+              </span>
+              {displayChange != null && (
                 <span
-                  className={`text-sm font-medium ${
-                    latestPrice.change_val >= 0
-                      ? "text-red-400"
-                      : "text-green-400"
+                  className={`text-sm font-medium tabular-nums ${
+                    displayChange >= 0 ? "text-red-400" : "text-green-400"
                   }`}
                 >
-                  {latestPrice.change_val >= 0 ? "+" : ""}
-                  {latestPrice.change_val.toFixed(2)}
+                  {displayChange >= 0 ? "+" : ""}
+                  {displayChange.toFixed(2)}
                 </span>
               )}
-            </div>
+            </>
           )}
         </div>
         <button

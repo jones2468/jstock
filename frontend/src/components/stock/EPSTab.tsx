@@ -36,8 +36,8 @@ export function EPSTab({ code }: { code: string }) {
     return a > b ? "text-red-400" : a < b ? "text-green-400" : "";
   };
 
-  // 倒序 → 正序顯示（舊的在上方）
-  const sorted = [...data].reverse();
+  // 最新在上（API 已倒序，直接用）
+  const sorted = data;
 
   return (
     <div className="space-y-6">

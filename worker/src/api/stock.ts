@@ -234,11 +234,17 @@ stockRoutes.get("/:code/valuation", async (c) => {
   // 最新收盤價
   const price = await db
     .prepare(
-      `SELECT close_price, price_date FROM stock_prices
+      `SELECT close_price, change_val, price_date FROM stock_prices
        WHERE stock_code = ? ORDER BY price_date DESC LIMIT 1`
     )
     .bind(code)
-    .first<{ close_price: number; price_date: string }>();
+    .first<{ close_price: number; change_val: number | null; price_date: string }>();
+
+  // 股名（從 stocks 主檔）
+  const stockInfo = await db
+    .prepare(`SELECT stock_name FROM stocks WHERE stock_code = ?`)
+    .bind(code)
+    .first<{ stock_name: string | null }>();
 
   // 近 4 季 EPS
   const { results: epsRows } = await db
@@ -310,7 +316,9 @@ stockRoutes.get("/:code/valuation", async (c) => {
     ok: true,
     data: {
       stock_code: code,
+      stock_name: stockInfo?.stock_name ?? null,
       current_price: price?.close_price ?? null,
+      change_val: price?.change_val ?? null,
       price_date: price?.price_date ?? null,
       trailing_eps: trailingEps,
       trailing_pe: trailingPe,
