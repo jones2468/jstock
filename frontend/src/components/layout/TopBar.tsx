@@ -1,10 +1,10 @@
-import { Search, Star } from "lucide-react";
+import { Menu, Search, Star } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useGlobalSearch } from "@/hooks/use-search";
 import { useFavorites } from "@/hooks/use-favorites";
 
-export function TopBar() {
+export function TopBar({ onMenuClick }: { onMenuClick?: () => void }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
@@ -54,7 +54,16 @@ export function TopBar() {
   const hasResults = (data?.stocks?.length ?? 0) + (data?.etfs?.length ?? 0) > 0;
 
   return (
-    <header className="flex h-14 items-center gap-4 border-b border-border bg-surface-secondary px-4">
+    <header className="flex h-14 items-center gap-2 border-b border-border bg-surface-secondary px-3 sm:gap-4 sm:px-4">
+      {/* 手機漢堡 */}
+      <button
+        onClick={onMenuClick}
+        className="rounded-md p-2 text-slate-400 hover:bg-surface hover:text-slate-200 lg:hidden"
+        aria-label="開啟選單"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
       <div ref={wrapRef} className="relative flex-1 max-w-md">
         <form onSubmit={handleSubmit}>
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
@@ -66,7 +75,7 @@ export function TopBar() {
               setOpen(true);
             }}
             onFocus={() => setOpen(true)}
-            placeholder="搜尋股票/ETF 代碼或名稱..."
+            placeholder="搜尋股票/ETF..."
             className="w-full rounded-md border border-border bg-surface py-1.5 pl-9 pr-3 text-sm text-slate-200 placeholder-slate-500 outline-none focus:border-accent"
           />
         </form>
@@ -172,7 +181,7 @@ export function TopBar() {
         )}
       </div>
 
-      <div className="text-xs text-slate-500">台股 / ETF 監測平台</div>
+      <div className="hidden text-xs text-slate-500 md:block">台股 / ETF 監測平台</div>
     </header>
   );
 }

@@ -32,7 +32,7 @@ export function ETFDetailPage() {
 
       {/* Summary badges */}
       {diffs && diffs.length > 0 && (
-        <div className="mb-4 flex gap-4 text-sm">
+        <div className="mb-4 flex flex-wrap gap-x-4 gap-y-1 text-sm">
           <Stat label="持股數" value={holdings?.length ?? 0} />
           <Stat label="新增" value={diffs.filter((d) => d.diff_type === "new").length} color="emerald" />
           <Stat label="移除" value={diffs.filter((d) => d.diff_type === "removed").length} color="red" />

@@ -139,8 +139,34 @@ export function WatchlistPage() {
       ) : isLoading ? (
         <LoadingSpinner />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full min-w-[920px] text-sm">
+        <>
+          {/* 手機：卡片清單 */}
+          <div className="space-y-2 lg:hidden">
+            <MobileSortBar
+              sortKey={sortKey}
+              sortDir={sortDir}
+              onSort={handleSort}
+            />
+            {sortedRows.map(({ row, pe, inst, etf, overall, levels }) => (
+              <MobileCard
+                key={row.stock_code}
+                row={row}
+                peTone={pe}
+                instTone={inst}
+                etfTone={etf}
+                overall={overall}
+                levels={levels}
+                onRemove={() => {
+                  const type = etfs.includes(row.stock_code) ? "etf" : "stock";
+                  toggleItem(type, row.stock_code);
+                }}
+              />
+            ))}
+          </div>
+
+          {/* 桌面：表格 */}
+          <div className="hidden overflow-x-auto rounded-lg border border-border lg:block">
+            <table className="w-full min-w-[920px] text-sm">
             <thead className="bg-surface-secondary text-xs text-slate-500">
               <tr className="text-left">
                 <th className="w-12 py-2 pl-3">
@@ -224,7 +250,8 @@ export function WatchlistPage() {
               ))}
             </tbody>
           </table>
-        </div>
+          </div>
+        </>
       )}
 
       {total > 0 && <RadarMiniSection />}
@@ -260,6 +287,152 @@ function SortHeader({
       <span>{label}</span>
       <Icon className="h-3 w-3 shrink-0" />
     </button>
+  );
+}
+
+// 手機卡片排序快選列
+function MobileSortBar({
+  sortKey,
+  sortDir,
+  onSort,
+}: {
+  sortKey: SortKey;
+  sortDir: SortDir;
+  onSort: (k: SortKey) => void;
+}) {
+  const opts: Array<{ k: SortKey; label: string }> = [
+    { k: "signal", label: "訊號" },
+    { k: "code", label: "代號" },
+    { k: "price", label: "現價" },
+    { k: "change", label: "漲跌" },
+    { k: "pe", label: "P/E" },
+    { k: "inst", label: "法人" },
+  ];
+  return (
+    <div className="-mx-3 mb-1 overflow-x-auto px-3">
+      <div className="flex min-w-max gap-1 text-xs">
+        <span className="self-center pr-1 text-slate-500">排序</span>
+        {opts.map((o) => {
+          const active = sortKey === o.k;
+          return (
+            <button
+              key={o.k}
+              onClick={() => onSort(o.k)}
+              className={`shrink-0 rounded-full border px-2.5 py-1 transition-colors ${
+                active
+                  ? "border-accent bg-accent/10 text-accent"
+                  : "border-border text-slate-400 hover:border-slate-500"
+              }`}
+            >
+              {o.label}
+              {active && (
+                <span className="ml-1 text-[10px]">
+                  {sortDir === "asc" ? "↑" : "↓"}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MobileCard({
+  row,
+  peTone,
+  instTone,
+  etfTone,
+  overall,
+  levels,
+  onRemove,
+}: {
+  row: DashboardRow;
+  peTone: Signal;
+  instTone: Signal;
+  etfTone: Signal;
+  overall: Signal;
+  levels: { cheap: number; fair: number; expensive: number };
+  onRemove: () => void;
+}) {
+  const fair = row.trailing_eps;
+  return (
+    <div className="rounded-lg border border-border bg-surface-secondary p-3">
+      <div className="flex items-start gap-2">
+        <div
+          className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${signalDotClass(overall)}`}
+          title={signalLabel(overall)}
+        />
+        <Link to={`/stock/${row.stock_code}`} className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium text-accent">
+            {row.stock_name ?? row.stock_code}
+            <span className="ml-1.5 text-xs font-normal text-slate-500">
+              {row.stock_code}
+            </span>
+          </div>
+        </Link>
+        <div className="text-right">
+          <div className="text-base font-bold tabular-nums">
+            {row.current_price?.toLocaleString() ?? "—"}
+          </div>
+          {row.change_val != null && (
+            <div
+              className={`text-xs tabular-nums ${
+                row.change_val >= 0 ? "text-red-400" : "text-green-400"
+              }`}
+            >
+              {row.change_val >= 0 ? "+" : ""}
+              {row.change_val.toFixed(2)}
+            </div>
+          )}
+        </div>
+        <button
+          onClick={onRemove}
+          className="ml-1 rounded p-1 text-slate-600 hover:bg-red-400/10 hover:text-red-400"
+          title="從觀察清單移除"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      <div className="mt-2 grid grid-cols-3 gap-2 border-t border-border/40 pt-2 text-xs">
+        <div>
+          <div className="text-[10px] text-slate-500">P/E</div>
+          <div className={`tabular-nums ${signalTextClass(peTone)}`}>
+            {row.trailing_pe?.toFixed(1) ?? "—"}
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] text-slate-500">5 日法人</div>
+          <div className={`tabular-nums ${signalTextClass(instTone)}`}>
+            {formatBigNumber(row.institutional_net_5d)}
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] text-slate-500">ETF 持有</div>
+          <div className="tabular-nums text-slate-300">
+            {row.etf_count} 檔
+            {(row.etf_add_14d > 0 || row.etf_remove_14d > 0) && (
+              <span className={`ml-1 ${signalTextClass(etfTone)}`}>
+                ({row.etf_add_14d > 0 ? "+" : ""}
+                {row.etf_add_14d - row.etf_remove_14d})
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {fair != null && (
+        <div className="mt-2 text-[11px] text-slate-500">
+          合理價（{levels.cheap}/{levels.fair}/{levels.expensive}×）：
+          <span className="ml-1 tabular-nums text-slate-400">
+            {(fair * levels.cheap).toFixed(0)} /{" "}
+            {(fair * levels.fair).toFixed(0)} /{" "}
+            {(fair * levels.expensive).toFixed(0)}
+          </span>
+        </div>
+      )}
+    </div>
   );
 }
 

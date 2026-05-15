@@ -124,24 +124,26 @@ export function StockLookupPage() {
       {/* Valuation Summary Card */}
       <ValuationCard code={stockCode} />
 
-      {/* Tabs */}
-      <div className="mb-4 flex gap-1 border-b border-border">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`relative px-4 py-2 text-sm transition-colors ${
-              tab === t.key
-                ? "text-accent"
-                : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            {t.label}
-            {tab === t.key && (
-              <span className="absolute inset-x-0 -bottom-px h-0.5 bg-accent" />
-            )}
-          </button>
-        ))}
+      {/* Tabs（手機橫向滑動） */}
+      <div className="mb-4 -mx-3 overflow-x-auto border-b border-border sm:mx-0">
+        <div className="flex min-w-max gap-1 px-3 sm:px-0">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`relative shrink-0 px-3 py-2 text-sm transition-colors sm:px-4 ${
+                tab === t.key
+                  ? "text-accent"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              {t.label}
+              {tab === t.key && (
+                <span className="absolute inset-x-0 -bottom-px h-0.5 bg-accent" />
+              )}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Tab body */}

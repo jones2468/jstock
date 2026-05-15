@@ -58,15 +58,15 @@ export function MarketTempPage() {
       </div>
 
       {/* TAIEX header */}
-      <div className="mb-6 rounded-lg border border-border bg-surface-secondary p-5">
-        <div className="flex items-baseline gap-4">
+      <div className="mb-6 rounded-lg border border-border bg-surface-secondary p-4 sm:p-5">
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <span className="text-sm text-slate-400">加權指數</span>
-          <span className="text-3xl font-bold tabular-nums">
+          <span className="text-2xl font-bold tabular-nums sm:text-3xl">
             {data.taiex_close?.toLocaleString() ?? "—"}
           </span>
           {data.taiex_change != null && (
             <span
-              className={`text-base font-medium tabular-nums ${
+              className={`text-sm font-medium tabular-nums sm:text-base ${
                 data.taiex_change >= 0 ? "text-red-400" : "text-green-400"
               }`}
             >
