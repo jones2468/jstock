@@ -1,9 +1,27 @@
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { ChevronLeft, RotateCcw, Star } from "lucide-react";
-import { Responsive, WidthProvider, type Layout, type Layouts } from "react-grid-layout";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+import * as RGL from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
+
+// react-grid-layout 的 @types 沒正確 export Layouts / WidthProvider
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const ResponsiveGrid: any = (RGL as any).Responsive;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const WidthProvider: any = (RGL as any).WidthProvider;
+
+interface LayoutItem {
+  i: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  minW?: number;
+  minH?: number;
+}
+type Layouts = Record<string, LayoutItem[]>;
 import { useStockChartData } from "@/hooks/use-prices";
 import { useStockETFs } from "@/hooks/use-stock";
 import { useFavorites } from "@/hooks/use-favorites";
@@ -21,7 +39,7 @@ import { StockSettings } from "@/components/stock/StockSettings";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { EmptyState } from "@/components/ui/EmptyState";
 
-const ResponsiveGridLayout = WidthProvider(Responsive);
+const ResponsiveGridLayout = WidthProvider(ResponsiveGrid);
 
 const LAYOUT_STORAGE_KEY = "jstock_stock_dashboard_layout";
 
@@ -92,7 +110,7 @@ export function StockLookupPage() {
     saveLayouts(layouts);
   }, [layouts]);
 
-  const handleLayoutChange = (_current: Layout[], all: Layouts) => {
+  const handleLayoutChange = (_current: LayoutItem[], all: Layouts) => {
     setLayouts(all);
   };
 
