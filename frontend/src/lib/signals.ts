@@ -1,11 +1,16 @@
+import { DEFAULT_PE_LEVELS, type PELevels } from "./pe-levels";
+
 export type Signal = "green" | "yellow" | "red" | "gray";
 
 const NEUTRAL_INST_THRESHOLD = 100_000_000; // 5 日法人 ±1 億內視為中性
 
-export function peSignal(pe: number | null): Signal {
+export function peSignal(
+  pe: number | null,
+  levels: PELevels = DEFAULT_PE_LEVELS
+): Signal {
   if (pe == null || !Number.isFinite(pe)) return "gray";
-  if (pe < 15) return "green";
-  if (pe > 25) return "red";
+  if (pe < levels.cheap) return "green";
+  if (pe > levels.expensive) return "red";
   return "yellow";
 }
 

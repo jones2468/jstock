@@ -1,4 +1,6 @@
 import { useValuation } from "@/hooks/use-stock-detail";
+import { usePELevels } from "@/hooks/use-pe-levels";
+import { PELevelsEditor } from "./PELevelsEditor";
 import {
   TrendingUp,
   TrendingDown,
@@ -9,6 +11,7 @@ import {
 
 export function ValuationCard({ code }: { code: string }) {
   const { data, isLoading } = useValuation(code);
+  const { levels } = usePELevels(code);
 
   if (isLoading) {
     return (
@@ -30,17 +33,15 @@ export function ValuationCard({ code }: { code: string }) {
   const pe = data.trailing_pe;
   const eps = data.trailing_eps;
 
-  // 本益比評級：<15 便宜, 15~20 合理, 20~30 偏貴, >30 昂貴
+  // 依使用者自設門檻分級
   const peLevel =
     pe == null
       ? { label: "無資料", color: "text-slate-500", bg: "bg-slate-500/10" }
-      : pe < 15
+      : pe < levels.cheap
         ? { label: "便宜", color: "text-green-400", bg: "bg-green-400/10" }
-        : pe < 20
-          ? { label: "合理", color: "text-blue-400", bg: "bg-blue-400/10" }
-          : pe < 30
-            ? { label: "偏貴", color: "text-amber-400", bg: "bg-amber-400/10" }
-            : { label: "昂貴", color: "text-red-400", bg: "bg-red-400/10" };
+        : pe <= levels.expensive
+          ? { label: "合理", color: "text-amber-400", bg: "bg-amber-400/10" }
+          : { label: "偏貴", color: "text-red-400", bg: "bg-red-400/10" };
 
   // 法人動向
   const instNet = data.institutional_net_5d;
@@ -74,6 +75,7 @@ export function ValuationCard({ code }: { code: string }) {
 
   return (
     <div className="mb-4 rounded-lg border border-border bg-surface-secondary p-4">
+      <PELevelsEditor code={code} />
       <div className="mb-2 flex items-center gap-2 text-xs text-slate-500">
         <BarChart3 className="h-3.5 w-3.5" />
         <span>研判總覽</span>
@@ -110,15 +112,19 @@ export function ValuationCard({ code }: { code: string }) {
           }
         />
 
-        {/* 合理價（EPS × 15~20 倍） */}
+        {/* 合理價（EPS × cheap~expensive 倍） */}
         <MetricCell
           label="估算合理價"
           value={
             eps != null && eps > 0
-              ? `${(eps * 15).toLocaleString(undefined, { maximumFractionDigits: 0 })} ~ ${(eps * 20).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+              ? `${(eps * levels.cheap).toLocaleString(undefined, { maximumFractionDigits: 0 })} ~ ${(eps * levels.expensive).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
               : "-"
           }
-          sub={eps != null && eps > 0 ? "15~20 倍本益比" : undefined}
+          sub={
+            eps != null && eps > 0
+              ? `${levels.cheap}~${levels.expensive} 倍本益比`
+              : undefined
+          }
           icon={<TrendingDown className="h-4 w-4 text-emerald-400" />}
         />
 
