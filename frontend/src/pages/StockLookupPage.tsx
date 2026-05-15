@@ -13,33 +13,14 @@ import { MarginTab } from "@/components/stock/MarginTab";
 import { RevenueTab } from "@/components/stock/RevenueTab";
 import { EPSTab } from "@/components/stock/EPSTab";
 import { ValuationCard } from "@/components/stock/ValuationCard";
+import { DashboardCard } from "@/components/stock/DashboardCard";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { EmptyState } from "@/components/ui/EmptyState";
-
-type Tab =
-  | "chart"
-  | "river"
-  | "institutional"
-  | "margin"
-  | "revenue"
-  | "eps"
-  | "etfs";
-
-const TABS: { key: Tab; label: string }[] = [
-  { key: "chart", label: "走勢圖" },
-  { key: "river", label: "估值河流" },
-  { key: "eps", label: "EPS / 估值" },
-  { key: "institutional", label: "三大法人" },
-  { key: "margin", label: "融資融券" },
-  { key: "revenue", label: "月營收" },
-  { key: "etfs", label: "ETF 持倉" },
-];
 
 export function StockLookupPage() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
   const stockCode = code ?? "";
-  const [tab, setTab] = useState<Tab>("chart");
 
   const { prices, indicators, isLoading, isLoadingMore, loadMore } =
     useStockChartData(stockCode);
@@ -47,15 +28,17 @@ export function StockLookupPage() {
   const { data: valuation } = useValuation(stockCode);
   const { isFavorite, toggle } = useFavorites();
 
+  // EPS 卡內切換：估值 / 估值河流
+  const [epsView, setEpsView] = useState<"eps" | "river">("eps");
+
   const latestPrice = prices.length > 0 ? prices[prices.length - 1] : null;
   const stockName = valuation?.stock_name ?? null;
-  // 優先用最新走勢圖資料，沒有就用 valuation 的 latest
   const displayPrice = latestPrice?.close_price ?? valuation?.current_price ?? null;
   const displayChange = latestPrice?.change_val ?? valuation?.change_val ?? null;
 
   return (
     <div>
-      {/* 麵包屑 / 返回 */}
+      {/* 麵包屑 */}
       <nav className="mb-3 flex items-center gap-1 text-xs text-slate-500">
         <button
           onClick={() => navigate(-1)}
@@ -75,8 +58,8 @@ export function StockLookupPage() {
         </span>
       </nav>
 
-      {/* Header：鴻海 2317 | 251 +1.00 */}
-      <div className="mb-6 flex items-start justify-between">
+      {/* Header */}
+      <div className="mb-4 flex items-start justify-between">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h1 className="text-xl font-bold">
             {stockName ?? stockCode}
@@ -121,60 +104,104 @@ export function StockLookupPage() {
         </button>
       </div>
 
-      {/* Valuation Summary Card */}
+      {/* 研判總覽（橫向長條） */}
       <ValuationCard code={stockCode} />
 
-      {/* Tabs（手機橫向滑動） */}
-      <div className="mb-4 -mx-3 overflow-x-auto border-b border-border sm:mx-0">
-        <div className="flex min-w-max gap-1 px-3 sm:px-0">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`relative shrink-0 px-3 py-2 text-sm transition-colors sm:px-4 ${
-                tab === t.key
-                  ? "text-accent"
-                  : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              {t.label}
-              {tab === t.key && (
-                <span className="absolute inset-x-0 -bottom-px h-0.5 bg-accent" />
-              )}
-            </button>
-          ))}
+      {/*
+        Dashboard grid
+        - lg+ 桌面：12 欄  → K 線占 col-span-8 row-span-2、其他 col-span-4
+        - md  中型：2 欄
+        - 手機：1 欄垂直 stack
+      */}
+      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-12 lg:grid-rows-[auto_auto_auto]">
+        {/* K 線：大卡 */}
+        <div className="md:col-span-2 lg:col-span-8 lg:row-span-2">
+          <DashboardCard title="股價 K 線" maxHeight="560px">
+            {isLoading ? (
+              <LoadingSpinner />
+            ) : prices.length === 0 ? (
+              <EmptyState message="尚無股價資料（排程可能尚未執行）" />
+            ) : (
+              <SyncedStockChart
+                prices={prices}
+                indicators={indicators}
+                trailingEps={valuation?.trailing_eps ?? null}
+                onLoadMore={loadMore}
+                isLoadingMore={isLoadingMore}
+              />
+            )}
+          </DashboardCard>
         </div>
-      </div>
 
-      {/* Tab body */}
-      <div className="rounded-lg border border-border bg-surface-secondary p-3">
-        {tab === "chart" &&
-          (isLoading ? (
-            <LoadingSpinner />
-          ) : prices.length === 0 ? (
-            <EmptyState message="尚無股價資料（排程可能尚未執行）" />
-          ) : (
-            <SyncedStockChart
-              prices={prices}
-              indicators={indicators}
-              trailingEps={valuation?.trailing_eps ?? null}
-              onLoadMore={loadMore}
-              isLoadingMore={isLoadingMore}
-            />
-          ))}
+        {/* EPS / 估值（含估值河流切換）*/}
+        <div className="lg:col-span-4">
+          <DashboardCard
+            title="EPS / 估值"
+            maxHeight="320px"
+            extra={
+              <div className="flex gap-0.5 rounded-md bg-surface p-0.5 text-[11px]">
+                <button
+                  onClick={() => setEpsView("eps")}
+                  className={`rounded px-2 py-0.5 transition-colors ${
+                    epsView === "eps"
+                      ? "bg-accent/20 text-accent"
+                      : "text-slate-500 hover:text-slate-300"
+                  }`}
+                >
+                  季 EPS
+                </button>
+                <button
+                  onClick={() => setEpsView("river")}
+                  className={`rounded px-2 py-0.5 transition-colors ${
+                    epsView === "river"
+                      ? "bg-accent/20 text-accent"
+                      : "text-slate-500 hover:text-slate-300"
+                  }`}
+                >
+                  估值河流
+                </button>
+              </div>
+            }
+          >
+            {epsView === "eps" ? (
+              <EPSTab code={stockCode} />
+            ) : (
+              <PERiverChart code={stockCode} />
+            )}
+          </DashboardCard>
+        </div>
 
-        {tab === "river" && <PERiverChart code={stockCode} />}
-        {tab === "eps" && <EPSTab code={stockCode} />}
-        {tab === "institutional" && <InstitutionalTab code={stockCode} />}
-        {tab === "margin" && <MarginTab code={stockCode} />}
-        {tab === "revenue" && <RevenueTab code={stockCode} />}
+        {/* 月營收 */}
+        <div className="lg:col-span-4">
+          <DashboardCard title="月營收" maxHeight="220px">
+            <RevenueTab code={stockCode} />
+          </DashboardCard>
+        </div>
 
-        {tab === "etfs" &&
-          (etfs && etfs.length > 0 ? (
-            <StockETFList etfs={etfs} />
-          ) : (
-            <EmptyState message="此股票目前未被任何 ETF 持有（或尚無持倉資料）" />
-          ))}
+        {/* 三大法人 */}
+        <div className="lg:col-span-4">
+          <DashboardCard title="三大法人" maxHeight="320px">
+            <InstitutionalTab code={stockCode} />
+          </DashboardCard>
+        </div>
+
+        {/* 融資融券 */}
+        <div className="lg:col-span-4">
+          <DashboardCard title="融資融券" maxHeight="320px">
+            <MarginTab code={stockCode} />
+          </DashboardCard>
+        </div>
+
+        {/* ETF 持倉 */}
+        <div className="lg:col-span-4">
+          <DashboardCard title="ETF 持倉" maxHeight="320px">
+            {etfs && etfs.length > 0 ? (
+              <StockETFList etfs={etfs} />
+            ) : (
+              <EmptyState message="此股票目前未被任何 ETF 持有" />
+            )}
+          </DashboardCard>
+        </div>
       </div>
     </div>
   );
