@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   Star,
   Trash2,
@@ -9,8 +9,10 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  Pencil,
+  Trash,
 } from "lucide-react";
-import { useFavorites } from "@/hooks/use-favorites";
+import { useWatchlistGroups, useGroupItems } from "@/hooks/use-watchlist-groups";
 import {
   useWatchlistDashboard,
   type DashboardRow,
@@ -57,7 +59,12 @@ function compareNullable(a: number | null, b: number | null, dir: SortDir): numb
 }
 
 export function WatchlistPage() {
-  const { stocks, etfs, toggleItem } = useFavorites();
+  const { groupId: routeGroupId } = useParams<{ groupId: string }>();
+  const groupId = routeGroupId ?? "default";
+  const navigate = useNavigate();
+  const { groups, renameGroup, deleteGroup } = useWatchlistGroups();
+  const { stocks, etfs, toggleItem, checkItem } = useGroupItems(groupId);
+  const group = groups.find((g) => g.id === groupId);
   const allCodes = useMemo(() => [...stocks, ...etfs], [stocks, etfs]);
 
   const { data: rows, isLoading } = useWatchlistDashboard(allCodes);
@@ -125,8 +132,34 @@ export function WatchlistPage() {
     <div>
       <div className="mb-6 flex items-center gap-2">
         <Star className="h-5 w-5 text-amber-400" fill="currentColor" />
-        <h1 className="text-xl font-bold">觀察清單</h1>
+        <h1 className="text-xl font-bold">{group?.name ?? "觀察清單"}</h1>
         <span className="text-sm text-slate-500">({total})</span>
+        {groupId !== "default" && (
+          <>
+            <button
+              onClick={() => {
+                const name = prompt("重新命名群組：", group?.name);
+                if (name?.trim()) renameGroup(groupId, name.trim());
+              }}
+              className="rounded p-1 text-slate-500 hover:bg-surface hover:text-slate-200"
+              title="重新命名"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => {
+                if (confirm(`確定刪除「${group?.name}」群組？（股票不會被刪除）`)) {
+                  deleteGroup(groupId);
+                  navigate("/");
+                }
+              }}
+              className="rounded p-1 text-slate-500 hover:bg-red-400/10 hover:text-red-400"
+              title="刪除群組"
+            >
+              <Trash className="h-3.5 w-3.5" />
+            </button>
+          </>
+        )}
         <span className="ml-auto text-xs text-slate-500">
           {sortKey === "signal" && sortDir === "asc"
             ? "訊號優先 · 紅 → 黃 → 綠 → 無"
@@ -135,7 +168,7 @@ export function WatchlistPage() {
       </div>
 
       {total === 0 ? (
-        <EmptyState />
+        <EmptyState onToggle={toggleItem} />
       ) : isLoading ? (
         <LoadingSpinner />
       ) : (
@@ -254,7 +287,7 @@ export function WatchlistPage() {
         </>
       )}
 
-      {total > 0 && <RadarMiniSection />}
+      {total > 0 && <RadarMiniSection toggleItem={toggleItem} checkItem={checkItem} />}
     </div>
   );
 }
@@ -530,8 +563,7 @@ function Row({
   );
 }
 
-function EmptyState() {
-  const { toggleItem } = useFavorites();
+function EmptyState({ onToggle }: { onToggle: (type: "stock" | "etf", code: string) => void }) {
   return (
     <div className="rounded-lg border border-dashed border-border bg-surface-secondary p-8 text-center">
       <Star className="mx-auto mb-3 h-10 w-10 text-slate-600" />
@@ -544,7 +576,7 @@ function EmptyState() {
         {QUICK_ADD.map(({ code, name }) => (
           <button
             key={code}
-            onClick={() => toggleItem("stock", code)}
+            onClick={() => onToggle("stock", code)}
             className="rounded-md border border-border bg-surface px-3 py-2 text-sm transition-colors hover:border-accent hover:text-accent"
           >
             <span className="font-medium">{name}</span>
@@ -556,7 +588,10 @@ function EmptyState() {
   );
 }
 
-function RadarMiniSection() {
+function RadarMiniSection({ toggleItem, checkItem }: {
+  toggleItem: (type: "stock" | "etf", code: string) => void;
+  checkItem: (type: "stock" | "etf", code: string) => boolean;
+}) {
   const { data: adds, isLoading: addLoading } = useRadarSyncAdd(5, 2);
   const { data: removes, isLoading: rmLoading } = useRadarSyncReduce(5, 2);
 
@@ -576,6 +611,8 @@ function RadarMiniSection() {
           rows={adds?.slice(0, 5)}
           isLoading={addLoading}
           tone="up"
+          toggleItem={toggleItem}
+          checkItem={checkItem}
         />
         <RadarPanel
           title="同步減碼 TOP 5"
@@ -583,6 +620,8 @@ function RadarMiniSection() {
           rows={removes?.slice(0, 5)}
           isLoading={rmLoading}
           tone="down"
+          toggleItem={toggleItem}
+          checkItem={checkItem}
         />
       </div>
     </section>
@@ -595,6 +634,8 @@ function RadarPanel({
   rows,
   isLoading,
   tone,
+  toggleItem,
+  checkItem,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -603,8 +644,9 @@ function RadarPanel({
     | undefined;
   isLoading: boolean;
   tone: "up" | "down";
+  toggleItem: (type: "stock" | "etf", code: string) => void;
+  checkItem: (type: "stock" | "etf", code: string) => boolean;
 }) {
-  const { toggleItem, checkItem } = useFavorites();
   const toneClass = tone === "up" ? "text-emerald-400" : "text-rose-400";
 
   return (

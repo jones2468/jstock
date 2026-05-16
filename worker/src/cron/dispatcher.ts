@@ -47,6 +47,7 @@ async function runCleanup(env: Env): Promise<void> {
     "stock_prices",
     "daily_institutional",
     "daily_margin",
+    "index_daily",
   ];
   const dateCol: Record<string, string> = {
     holdings_snapshots: "snapshot_date",
@@ -54,6 +55,7 @@ async function runCleanup(env: Env): Promise<void> {
     stock_prices: "price_date",
     daily_institutional: "trade_date",
     daily_margin: "trade_date",
+    index_daily: "trade_date",
   };
 
   for (const table of tables) {

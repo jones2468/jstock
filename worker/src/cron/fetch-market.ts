@@ -1,5 +1,6 @@
 import type { Env } from "../env";
 import { fetchMarketDaily, type MarketDailyRow } from "../data-sources/market";
+import { fetchAllIndices } from "../data-sources/indices";
 
 /**
  * 每日抓近 7 天大盤數據（加權指數 + 全市場成交量 + 全市場融資融券餘額）
@@ -44,4 +45,22 @@ export async function runFetchMarket(env: Env): Promise<void> {
 
   await env.DB.batch(stmts);
   console.log(`[fetch-market] upserted ${rows.length} rows`);
+
+  // 四大指數日收盤（加權 / 櫃買 / 半導體 / 金融）
+  try {
+    const idxRows = await fetchAllIndices(startDate);
+    if (idxRows.length > 0) {
+      const idxStmts = idxRows.map((r) =>
+        env.DB.prepare(
+          `INSERT OR REPLACE INTO index_daily
+             (index_code, trade_date, close_price, change_val, change_pct)
+           VALUES (?, ?, ?, ?, ?)`
+        ).bind(r.index_code, r.trade_date, r.close_price, r.change_val, r.change_pct)
+      );
+      await env.DB.batch(idxStmts);
+      console.log(`[fetch-market] indices upserted ${idxRows.length} rows`);
+    }
+  } catch (e) {
+    console.error("[fetch-market] indices failed (non-fatal):", e);
+  }
 }

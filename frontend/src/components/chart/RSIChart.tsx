@@ -48,11 +48,11 @@ export function RSIChart({ indicators, height = 120 }: Props) {
 
     chart.timeScale().fitContent();
 
-    const handleResize = () => {
+    const ro = new ResizeObserver(() => {
       if (containerRef.current) chart.applyOptions({ width: containerRef.current.clientWidth });
-    };
-    window.addEventListener("resize", handleResize);
-    return () => { window.removeEventListener("resize", handleResize); chart.remove(); };
+    });
+    if (containerRef.current) ro.observe(containerRef.current);
+    return () => { ro.disconnect(); chart.remove(); };
   }, [indicators, height]);
 
   return (

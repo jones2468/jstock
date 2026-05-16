@@ -87,15 +87,15 @@ export function KLineChart({ prices, indicators, height = 400 }: Props) {
 
     chart.timeScale().fitContent();
 
-    const handleResize = () => {
+    const ro = new ResizeObserver(() => {
       if (containerRef.current) {
         chart.applyOptions({ width: containerRef.current.clientWidth });
       }
-    };
-    window.addEventListener("resize", handleResize);
+    });
+    if (containerRef.current) ro.observe(containerRef.current);
 
     return () => {
-      window.removeEventListener("resize", handleResize);
+      ro.disconnect();
       chart.remove();
     };
   }, [prices, indicators, height]);

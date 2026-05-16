@@ -294,8 +294,8 @@ export function SyncedStockChart({
       () => rsiLineRef.current,
     ]);
 
-    // Resize
-    const handleResize = () => {
+    // Resize — observe container instead of window so grid-layout drag/resize triggers too
+    const ro = new ResizeObserver(() => {
       [
         [kChart, kRef] as const,
         [rChart, rsiRef] as const,
@@ -304,11 +304,11 @@ export function SyncedStockChart({
         if (ref.current)
           chart.applyOptions({ width: ref.current.clientWidth });
       });
-    };
-    window.addEventListener("resize", handleResize);
+    });
+    if (kRef.current) ro.observe(kRef.current);
 
     return () => {
-      window.removeEventListener("resize", handleResize);
+      ro.disconnect();
       kChart.remove();
       rChart.remove();
       mChart.remove();

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { HonoEnv } from "../env";
 import { runFetchInstitutionalMargin } from "../cron/fetch-institutional-margin";
+import { runFetchPrices } from "../cron/fetch-prices";
 import { runFetchRevenue } from "../cron/fetch-revenue";
 import { runFetchEPS, runFetchEPSForQuarter } from "../cron/fetch-eps";
 import { runFetchMarket } from "../cron/fetch-market";
@@ -56,6 +57,11 @@ adminRoutes.get("/stats/holdings", async (c) => {
     holdings_rows: totalRows?.n,
     last_run: lastRun,
   });
+});
+
+adminRoutes.post("/run/fetch-prices", async (c) => {
+  await runFetchPrices(c.env as unknown as Env);
+  return c.json({ ok: true });
 });
 
 adminRoutes.post("/run/institutional-margin", async (c) => {

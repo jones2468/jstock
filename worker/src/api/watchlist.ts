@@ -176,3 +176,32 @@ watchlistRoutes.post("/dashboard", async (c) => {
 
   return c.json({ ok: true, data: result });
 });
+
+watchlistRoutes.post("/sparklines", async (c) => {
+  const body = await c.req.json<{ codes: string[]; days?: number }>();
+  const codes = [...new Set(body.codes ?? [])].filter(Boolean);
+  if (codes.length === 0) return c.json({ ok: true, data: {} });
+
+  const days = Math.min(body.days ?? 30, 90);
+  const db = c.env.DB;
+  const ph = codes.map(() => "?").join(",");
+
+  const { results } = await db
+    .prepare(
+      `SELECT stock_code, close_price, price_date
+       FROM stock_prices
+       WHERE stock_code IN (${ph})
+         AND price_date >= date('now', '-${days} days')
+       ORDER BY stock_code, price_date ASC`
+    )
+    .bind(...codes)
+    .all<{ stock_code: string; close_price: number; price_date: string }>();
+
+  const map: Record<string, number[]> = {};
+  for (const r of results) {
+    if (!map[r.stock_code]) map[r.stock_code] = [];
+    map[r.stock_code].push(r.close_price);
+  }
+
+  return c.json({ ok: true, data: map });
+});

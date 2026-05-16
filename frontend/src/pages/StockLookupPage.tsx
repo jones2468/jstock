@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, RotateCcw, Star } from "lucide-react";
+import { useParams } from "react-router-dom";
+import { RotateCcw, Star } from "lucide-react";
 import { Responsive, WidthProvider } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -36,8 +36,6 @@ const ResponsiveGridLayout = WidthProvider(Responsive);
 
 const LAYOUT_STORAGE_KEY = "jstock_stock_dashboard_layout";
 
-// 預設 layout：每個 breakpoint 12 columns
-// 排列：K 線（左大）/ EPS 估值 / 月營收 / 三大法人 / 融資融券 / ETF 持倉
 const DEFAULT_LAYOUTS: Layouts = {
   lg: [
     { i: "chart", x: 0, y: 0, w: 8, h: 16, minW: 4, minH: 8 },
@@ -86,7 +84,6 @@ function saveLayouts(layouts: Layouts) {
 
 export function StockLookupPage() {
   const { code } = useParams<{ code: string }>();
-  const navigate = useNavigate();
   const stockCode = code ?? "";
 
   const { prices, indicators, isLoading, isLoadingMore, loadMore } =
@@ -98,7 +95,6 @@ export function StockLookupPage() {
   const [layouts, setLayouts] = useState<Layouts>(loadLayouts);
   const [epsView, setEpsView] = useState<"eps" | "river">("eps");
 
-  // layout change → save
   useEffect(() => {
     saveLayouts(layouts);
   }, [layouts]);
@@ -119,28 +115,8 @@ export function StockLookupPage() {
 
   return (
     <div>
-      {/* 麵包屑 */}
-      <nav className="mb-3 flex items-center gap-1 text-xs text-slate-500">
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-0.5 rounded px-1 py-0.5 hover:bg-surface-secondary hover:text-slate-300"
-          title="返回上一頁"
-        >
-          <ChevronLeft className="h-3.5 w-3.5" />
-          返回
-        </button>
-        <span className="mx-1 text-slate-700">/</span>
-        <Link to="/" className="hover:text-slate-300">
-          觀察清單
-        </Link>
-        <span className="mx-1 text-slate-700">/</span>
-        <span className="text-slate-400">
-          {stockName ? `${stockName} ${stockCode}` : stockCode}
-        </span>
-      </nav>
-
       {/* Header */}
-      <div className="mb-4 flex items-start justify-between gap-2">
+      <div className="mb-3 flex items-start justify-between gap-2">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h1 className="text-xl font-bold">
             {stockName ?? stockCode}
@@ -195,14 +171,8 @@ export function StockLookupPage() {
         </div>
       </div>
 
-      {/* 研判總覽 */}
       <ValuationCard code={stockCode} />
 
-      <div className="mt-3 text-[11px] text-slate-500">
-        提示：拖拉卡片標題列改位置、右下角細條拖動改大小、右上 ⤢ 可全螢幕展開
-      </div>
-
-      {/* Dashboard grid（拖拉 + resize） */}
       <ResponsiveGridLayout
         className="layout mt-2"
         layouts={layouts}

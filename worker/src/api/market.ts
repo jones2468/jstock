@@ -193,6 +193,61 @@ marketRoutes.get("/temperature", async (c) => {
   });
 });
 
+// 四大指數近 N 日收盤（給 mini bar sparkline）
+marketRoutes.get("/indices", async (c) => {
+  const db = c.env.DB;
+  const days = Math.min(parseInt(c.req.query("days") ?? "30", 10) || 30, 90);
+
+  type Row = { index_code: string; trade_date: string; close_price: number | null; change_val: number | null; change_pct: number | null };
+  type Point = { date: string; close: number | null; change: number | null; pct: number | null };
+
+  const grouped: Record<string, Point[]> = {};
+
+  // index_daily 可能尚未建表（migration 未跑），用 try/catch 容錯
+  try {
+    const { results } = await db
+      .prepare(
+        `SELECT index_code, trade_date, close_price, change_val, change_pct
+         FROM index_daily
+         WHERE trade_date >= date('now', '-' || ? || ' days')
+         ORDER BY index_code, trade_date ASC`
+      )
+      .bind(days)
+      .all<Row>();
+
+    for (const r of results) {
+      if (!grouped[r.index_code]) grouped[r.index_code] = [];
+      grouped[r.index_code].push({ date: r.trade_date, close: r.close_price, change: r.change_val, pct: r.change_pct });
+    }
+  } catch {
+    // table doesn't exist yet
+  }
+
+  // Fallback: 如果 TAIEX 沒有 index_daily 資料，從 market_daily 補上
+  if (!grouped["TAIEX"] || grouped["TAIEX"].length === 0) {
+    const { results: md } = await db
+      .prepare(
+        `SELECT trade_date, taiex_close, taiex_change, taiex_change_pct
+         FROM market_daily
+         WHERE trade_date >= date('now', '-' || ? || ' days')
+         ORDER BY trade_date ASC`
+      )
+      .bind(days)
+      .all<{ trade_date: string; taiex_close: number | null; taiex_change: number | null; taiex_change_pct: number | null }>();
+
+    if (md.length > 0) {
+      grouped["TAIEX"] = md.map((r) => ({
+        date: r.trade_date,
+        close: r.taiex_close,
+        change: r.taiex_change,
+        pct: r.taiex_change_pct,
+      }));
+    }
+  }
+
+  return c.json({ ok: true, data: grouped });
+});
+
 async function getLatestM1B(db: D1Database) {
   const row = await db
     .prepare(

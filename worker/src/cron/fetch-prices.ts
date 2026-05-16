@@ -10,26 +10,31 @@ export async function runFetchPrices(env: Env): Promise<void> {
   const startedAt = new Date().toISOString();
 
   try {
-    // 1. Get stock codes we care about (held by any ETF today)
+    // 1. Get stock codes from the latest holdings snapshot (not necessarily today)
+    const latestDate = await db
+      .prepare(`SELECT MAX(snapshot_date) as d FROM holdings_snapshots`)
+      .first<{ d: string | null }>();
+
+    const snapshotDate = latestDate?.d ?? today;
     const { results: held } = await db
       .prepare(
         `SELECT DISTINCT stock_code FROM holdings_snapshots WHERE snapshot_date = ?`
       )
-      .bind(today)
+      .bind(snapshotDate)
       .all<{ stock_code: string }>();
 
     const heldCodes = new Set(held.map((r) => r.stock_code));
-    console.log(`[prices] ${heldCodes.size} unique stocks held today`);
+    console.log(`[prices] ${heldCodes.size} unique stocks from snapshot ${snapshotDate}`);
 
     if (heldCodes.size === 0) {
-      console.log("[prices] no holdings for today, skipping");
+      console.log("[prices] no holdings snapshots at all, skipping");
       await logCronRun(db, {
         jobName: CRON_JOBS.FETCH_PRICES,
         runDate: today,
         status: "success",
         etfCount: 0,
         recordCount: 0,
-        errorMessage: "no holdings snapshot for today",
+        errorMessage: "no holdings snapshots found",
         startedAt,
       });
       return;
