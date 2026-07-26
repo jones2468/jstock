@@ -9,12 +9,27 @@ binding = "DB"
 database_name = "jstock-db"
 database_id = "0b59fb31-171d-45d5-ba21-b9539a7c830d"
 
-# Cron triggers (UTC)
-[triggers]
-crons = [
-  # Holdings scraping moved to GitHub Actions (no subrequest limit)
-  "45 7 * * 1-5",   # 15:45 TST — fetch stock prices from TWSE
-  "0 8 * * 1-5",    # 16:00 TST — compute holdings diffs + cleanup old data
-  "30 8 * * 1-5",   # 16:30 TST — fetch institutional + margin (Phase B)
-  "0 4 11 * *",     # 12:00 TST every 11th — fetch monthly revenue + quarterly EPS + M1B
-]
+# ─────────────────────────────────────────────────────────────────────────────
+# Cron triggers (UTC) —— 2026-07-26 專案暫停期間【停用】
+#
+# 停用原因：專案暫停後排程仍每個交易日照跑，把 Cloudflare 免費方案的 D1 額度吃光
+# （帳號層級「Rows written」衝到 981k / 100k），連帶影響同帳號其他專案。
+# 當時 jstock-db 已累積約 109 萬列、120 MB，佔整個帳號儲存的 98%。
+# 主要成長來源：daily_institutional 736,852 列、holdings_snapshots 207,815 列。
+#
+# 已同時做的事：
+#   1. 線上 Worker 的 cron triggers 已透過 Cloudflare API 清空（PUT schedules []）。
+#   2. 本區塊註解掉——否則任何人再跑一次 `wrangler deploy` 就會把排程整組裝回去。
+#   3. GitHub Actions 的 scrape-holdings.yml 早已是 disabled_inactivity（最後執行 2026-07-15）。
+#
+# 要恢復：把下面 [triggers] 整段解除註解，再 `wrangler deploy`（或 `wrangler triggers deploy`）。
+# 恢復前建議先清掉歷史資料或改用保留期，否則額度會再次爆掉。
+# ─────────────────────────────────────────────────────────────────────────────
+# [triggers]
+# crons = [
+#   # Holdings scraping moved to GitHub Actions (no subrequest limit)
+#   "45 7 * * 1-5",   # 15:45 TST — fetch stock prices from TWSE
+#   "0 8 * * 1-5",    # 16:00 TST — compute holdings diffs + cleanup old data
+#   "30 8 * * 1-5",   # 16:30 TST — fetch institutional + margin (Phase B)
+#   "0 4 11 * *",     # 12:00 TST every 11th — fetch monthly revenue + quarterly EPS + M1B
+# ]
